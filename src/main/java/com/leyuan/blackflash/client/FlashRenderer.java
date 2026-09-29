@@ -145,22 +145,31 @@ public final class FlashRenderer {
         }
     }
 
-    /** 以相机朝向为 billboard 侧向，把折线画成一串共面四边形 */
+    /**
+     * 以相机朝向为 billboard 侧向，把折线画成一串共面四边形。
+     *
+     * <p><b>坐标空间</b>：event.getModelViewMatrix() 只含相机【旋转】（GameRenderer 用
+     * {@code new Matrix4f().rotation(quaternionf)} 构造，没有平移分量），
+     * 所以顶点必须传【相机相对坐标】= 世界坐标 − 相机位置。
+     * 传世界坐标会把几何画到离相机「坐标数值」那么远的地方，直接超出渲染距离而完全不可见。
+     */
     private static void stroke(VertexConsumer vc, Matrix4f view, Vec3 cam,
                                double[][] pts, int segs, float halfWidth, int[] rgb, int alpha) {
         if (segs < 1) return;
         for (int s = 1; s <= segs; s++) {
-            double ax = pts[s - 1][0], ay = pts[s - 1][1], az = pts[s - 1][2];
-            double bx = pts[s][0], by = pts[s][1], bz = pts[s][2];
+            // 世界坐标 → 相机相对坐标
+            double ax = pts[s - 1][0] - cam.x, ay = pts[s - 1][1] - cam.y, az = pts[s - 1][2] - cam.z;
+            double bx = pts[s][0] - cam.x, by = pts[s][1] - cam.y, bz = pts[s][2] - cam.z;
 
             double dx = bx - ax, dy = by - ay, dz = bz - az;
             double dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (dl < 1e-6) continue;
             dx /= dl; dy /= dl; dz /= dl;
 
-            double mx = (ax + bx) * 0.5 - cam.x;
-            double my = (ay + by) * 0.5 - cam.y;
-            double mz = (az + bz) * 0.5 - cam.z;
+            // 相机在相对空间里位于原点
+            double mx = (ax + bx) * 0.5;
+            double my = (ay + by) * 0.5;
+            double mz = (az + bz) * 0.5;
             double ml = Math.sqrt(mx * mx + my * my + mz * mz);
             if (ml < 1e-6) { mx = 0; my = 1; mz = 0; ml = 1; }
             mx /= ml; my /= ml; mz /= ml;

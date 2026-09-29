@@ -33,12 +33,11 @@ public final class TriggerHandler {
         BlackFlashConfig cfg = BlackFlashConfig.CONFIG;
         if (!cfg.enabled.get()) return;
 
-        // ① 攻击者必须是玩家、且是玩家亲手近战（横扫溅射伤害恒为 1.0，排除之）
+        // ① 攻击者必须是玩家、且是玩家亲手近战
         if (!(event.getSource().getEntity() instanceof ServerPlayer player)) return;
         if (!event.getSource().is(DamageTypeTags.IS_PLAYER_ATTACK)) return;
         if (event.getSource().getDirectEntity() != player) return;
         if (event.getSource().is(DamageTypeTags.IS_PROJECTILE)) return;
-        if (event.getOriginalDamage() == 1.0F) return; // 横扫溅射
         if (event.getSource().is(DamageTypeTags.IS_FALL)) return;
 
         // PvP 开关
@@ -62,21 +61,33 @@ public final class TriggerHandler {
         int stacks = GrowthManager.mugaStacks(player);
         double chance = forced ? 1.0 : ChanceTable.withMuga(count, stacks);
         if (player.getRandom().nextFloat() >= chance) {
-            if (crit) GrowthManager.onCritMissed(player); // 暴击命中未触发 → 连击清零
+            if (crit) GrowthManager.onCritMissed(player);
             return;
         }
 
-        // ⑤ 兑付：伤害替换 max(攻击力, 保底) ^ 2.5
-        double attack = Math.max(player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE),
+        // ⑤ 兑付：伤害 = max(攻击力, 保底) ^ (2.5 ^ 连击数)
+        //
+        //    连击数取「本次命中将是第几次黑闪」= 当前窗口内的连击 + 1。
+        //    第 1 次：base ^ 2.5；第 2 次：base ^ 6.25；第 3 次：base ^ 15.625 …
+        //    连击断掉后回到第 1 次（GrowthManager.liveStreak 会因超窗返回 0）。
+        int effectiveStreak = GrowthManager.liveStreak(player) + 1;
+        double base = Math.max(
+                player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE),
                 cfg.emptyHandFloor.get());
-        double damage = Math.pow(attack, 2.5);
+        double exponent = Math.pow(2.5, effectiveStreak);
+        double damage = Math.pow(base, exponent);
+
+        // 仅防 Infinity/NaN 进入 setNewDamage（float 上限），不改变任何有限结果
+        if (!Double.isFinite(damage) || damage > (double) Float.MAX_VALUE) {
+            damage = Float.MAX_VALUE;
+        }
         int cap = cfg.damageCap.get();
         if (cap > 0) damage = Math.min(damage, cap);
         event.setNewDamage((float) damage);
 
-        // ⑥ 额外击退（方向沿用原版：沿玩家朝向）
+        // ⑥ 额外击退（方向沿用原版：沿玩家朝向，sin 正 / cos 负）
         double yawRad = Math.toRadians(player.getYRot());
-        victim.knockback(cfg.blackflashKnockback.get(), -Math.sin(yawRad), Math.cos(yawRad));
+        victim.knockback(cfg.blackflashKnockback.get(), Math.sin(yawRad), -Math.cos(yawRad));
 
         // ⑦ 状态成长：熟练度 +1、连击 +1、无我刷新
         GrowthManager.FlashResult result = GrowthManager.onFlashLanded(player);
