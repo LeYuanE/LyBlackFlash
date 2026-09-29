@@ -1,0 +1,33 @@
+{
+  "text.black_flash.name": "Black Flash",
+  "text.black_flash.tier.novice": "Novice",
+  "text.black_flash.tier.decent": "Adept",
+  "text.black_flash.tier.master": "Master",
+  "text.black_flash.tier.summit": "Summit",
+  "text.black_flash.tier.perfect": "Perfection",
+
+  "subtitles.black_flash.impact": "Black Flash detonates",
+
+  "advancement.black_flash.root.title": "Ly Black Flash",
+  "advancement.black_flash.root.desc": "The art of black and red - proof of the zero-point strike",
+  "advancement.black_flash.first_flash.title": "First Black Flash",
+  "advancement.black_flash.first_flash.desc": "Trigger the near-impossible black burst from a perfect aerial crit",
+  "advancement.black_flash.bare_hand.title": "Bare-Handed Miracle",
+  "advancement.black_flash.bare_hand.desc": "Land a Black Flash with empty hands",
+  "advancement.black_flash.streak_4.title": "Flash x4",
+  "advancement.black_flash.streak_4.desc": "Chain 4 Black Flashes in a row",
+  "advancement.black_flash.daily_5.title": "Five in a Day",
+  "advancement.black_flash.daily_5.desc": "Trigger 5 Black Flashes within one in-game day",
+  "advancement.black_flash.streak_7.title": "Flash x7",
+  "advancement.black_flash.streak_7.desc": "Chain 7 Black Flashes in a row",
+  "advancement.black_flash.mastery.title": "Perfection",
+  "advancement.black_flash.mastery.desc": "Trigger your 9999th Black Flash. No sorcerer can chase a Black Flash on purpose - but you traded ten thousand accidents for certainty",
+
+  "command.blackflash.set": "Black Flash count set to %s (base chance %s)",
+  "command.blackflash.force": "The next critical hit is guaranteed to trigger a Black Flash",
+  "command.blackflash.reset": "Proficiency and streak have been reset",
+  "command.blackflash.stats.count": "Black Flashes landed: %s",
+  "command.blackflash.stats.chance": "Current chance: %s",
+  "command.blackflash.stats.tier": "Tier: %s",
+  "command.blackflash.stats.streak": "Current streak: %s"
+}

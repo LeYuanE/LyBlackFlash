@@ -1,0 +1,33 @@
+{
+  "text.black_flash.name": "黑闪",
+  "text.black_flash.tier.novice": "初入",
+  "text.black_flash.tier.decent": "小成",
+  "text.black_flash.tier.master": "大成",
+  "text.black_flash.tier.summit": "巅峰",
+  "text.black_flash.tier.perfect": "圆满",
+
+  "subtitles.black_flash.impact": "黑闪：空间爆裂",
+
+  "advancement.black_flash.root.title": "Ly 黑闪",
+  "advancement.black_flash.root.desc": "黑与红的术式——在空间夹缝的零点打击之证",
+  "advancement.black_flash.first_flash.title": "第一次黑闪",
+  "advancement.black_flash.first_flash.desc": "跳跃斩暴击命中时，极低概率触发的黑色爆发",
+  "advancement.black_flash.bare_hand.title": "赤手空拳的奇迹",
+  "advancement.black_flash.bare_hand.desc": "空手打出一次黑闪",
+  "advancement.black_flash.streak_4.title": "四连闪",
+  "advancement.black_flash.streak_4.desc": "连续打出 4 次黑闪",
+  "advancement.black_flash.daily_5.title": "一日五闪",
+  "advancement.black_flash.daily_5.desc": "在一个游戏日内打出 5 次黑闪",
+  "advancement.black_flash.streak_7.title": "七连闪",
+  "advancement.black_flash.streak_7.desc": "连续打出 7 次黑闪",
+  "advancement.black_flash.mastery.title": "圆满",
+  "advancement.black_flash.mastery.desc": "打出第 9999 次黑闪。没有任何术师能刻意追求黑闪——但你用一万次偶然换来了必然",
+
+  "command.blackflash.set": "黑闪次数已设为 %s（基础概率 %s）",
+  "command.blackflash.force": "下一次暴击必定触发黑闪",
+  "command.blackflash.reset": "熟练度与连击已清零",
+  "command.blackflash.stats.count": "已打出黑闪：%s 次",
+  "command.blackflash.stats.chance": "当前触发概率：%s",
+  "command.blackflash.stats.tier": "段位：%s",
+  "command.blackflash.stats.streak": "当前连击：%s"
+}

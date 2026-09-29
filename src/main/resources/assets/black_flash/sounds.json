@@ -1,0 +1,9 @@
+{
+  "impact": {
+    "category": "player",
+    "subtitle": "subtitles.black_flash.impact",
+    "sounds": [
+      "black_flash:impact"
+    ]
+  }
+}

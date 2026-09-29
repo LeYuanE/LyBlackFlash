@@ -1,0 +1,19 @@
+{
+  "display": {
+    "icon": { "id": "minecraft:golden_carrot" },
+    "title": { "translate": "advancement.black_flash.daily_5.title" },
+    "description": { "translate": "advancement.black_flash.daily_5.desc" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "parent": "black_flash:first_flash",
+  "criteria": {
+    "black_flash": {
+      "trigger": "black_flash:landed",
+      "conditions": {
+        "daily": { "min": 5 }
+      }
+    }
+  }
+}

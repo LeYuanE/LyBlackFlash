@@ -1,0 +1,19 @@
+{
+  "display": {
+    "icon": { "id": "minecraft:stick" },
+    "title": { "translate": "advancement.black_flash.bare_hand.title" },
+    "description": { "translate": "advancement.black_flash.bare_hand.desc" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "parent": "black_flash:first_flash",
+  "criteria": {
+    "black_flash": {
+      "trigger": "black_flash:landed",
+      "conditions": {
+        "bare_hand": true
+      }
+    }
+  }
+}

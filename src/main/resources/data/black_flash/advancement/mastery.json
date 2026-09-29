@@ -1,0 +1,19 @@
+{
+  "display": {
+    "icon": { "id": "minecraft:dragon_egg" },
+    "title": { "translate": "advancement.black_flash.mastery.title" },
+    "description": { "translate": "advancement.black_flash.mastery.desc" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "parent": "black_flash:streak_7",
+  "criteria": {
+    "black_flash": {
+      "trigger": "black_flash:landed",
+      "conditions": {
+        "count": { "min": 9999 }
+      }
+    }
+  }
+}
