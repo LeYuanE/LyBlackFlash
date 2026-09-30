@@ -13,20 +13,23 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
 /**
  * 触发链路的服务端半段：判定、掷骰、改伤害、击退、状态成长、广播演出，全部在这一个
- * LivingDamageEvent.Pre 里完成（单事件，无跨事件状态）。
+ * 事件里完成（单事件，无跨事件状态）。
  *
- * 该事件在护甲减免之后触发，setNewDamage 是绝对值赋值 —— 黑闪伤害天然绕过护甲与抗性。
+ * <p><b>伤害注入点在减免之前</b>：用 {@link LivingIncomingDamageEvent}（在
+ * {@code LivingEntity#hurt} 中、任何减免计算之前触发），按倍率<b>放大</b>原始伤害，
+ * 而不是替换减免后的结果。这样附魔、药水等加成照常生效，护甲、抗性、
+ * 保护附魔等减免也照常生效 —— 黑闪只是「这一刀更重」，其余走原版管线。
  */
 @EventBusSubscriber(modid = BlackFlash.MOD_ID)
 public final class TriggerHandler {
     private TriggerHandler() {}
 
     @SubscribeEvent
-    public static void onLivingDamage(LivingDamageEvent.Pre event) {
+    public static void onIncomingDamage(LivingIncomingDamageEvent event) {
         LivingEntity victim = event.getEntity();
         if (victim.level().isClientSide()) return;
 
@@ -44,7 +47,8 @@ public final class TriggerHandler {
         if (victim instanceof ServerPlayer && !cfg.pvpEnabled.get()) return;
 
         // ② 真正造成伤害
-        if (cfg.requireDamageDealt.get() && event.getNewDamage() <= 0.0F) return;
+        float original = event.getAmount();
+        if (cfg.requireDamageDealt.get() && original <= 0.0F) return;
 
         // ③ 蓄力与暴击校验
         //
@@ -69,25 +73,33 @@ public final class TriggerHandler {
             return;
         }
 
-        // ⑤ 兑付：伤害 = max(攻击力, 保底) ^ (2.5 ^ 连击数)
+        // ⑤ 兑付：把这一刀放大到 base ^ (2.5 ^ 连击数)
         //
         //    连击数取「本次命中将是第几次黑闪」= 当前窗口内的连击 + 1。
         //    第 1 次：base ^ 2.5；第 2 次：base ^ 6.25；第 3 次：base ^ 15.625 …
         //    连击断掉后回到第 1 次（GrowthManager.liveStreak 会因超窗返回 0）。
+        //
+        //    base 取「本刀的实际伤害」而不是裸攻击力属性：这样附魔、药水、力量效果
+        //    都会真正计入基数（锋利 V 的 10 点比无附魔的 7 点更强），与设计决策 28
+        //    「基数含附魔与药水，2.5 次方叠在所有加成之后」一致。
+        //
+        //    注入点在减免之前，所以放大后的数值仍会被护甲、抗性、保护附魔照常减免 ——
+        //    黑闪只是「这一刀更重」，不绕过任何防御。
         int effectiveStreak = GrowthManager.liveStreak(player) + 1;
-        double base = Math.max(
-                player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE),
-                cfg.emptyHandFloor.get());
+        double base = Math.max(original, cfg.emptyHandFloor.get());
         double exponent = Math.pow(2.5, effectiveStreak);
-        double damage = Math.pow(base, exponent);
+        double amplified = Math.pow(base, exponent);
 
-        // 仅防 Infinity/NaN 进入 setNewDamage（float 上限），不改变任何有限结果
-        if (!Double.isFinite(damage) || damage > (double) Float.MAX_VALUE) {
-            damage = Float.MAX_VALUE;
-        }
         int cap = cfg.damageCap.get();
-        if (cap > 0) damage = Math.min(damage, cap);
-        event.setNewDamage((float) damage);
+        if (cap > 0) amplified = Math.min(amplified, cap);
+
+        // 仅防 Infinity/NaN 进入伤害管线（float 上限），不改变任何有限结果
+        if (!Double.isFinite(amplified) || amplified > (double) Float.MAX_VALUE) {
+            amplified = Float.MAX_VALUE;
+        } else if (amplified < 0.0) {
+            amplified = 0.0;
+        }
+        event.setAmount((float) amplified);
 
         // ⑥ 额外击退（方向沿用原版：沿玩家朝向，sin 正 / cos 负）
         double yawRad = Math.toRadians(player.getYRot());

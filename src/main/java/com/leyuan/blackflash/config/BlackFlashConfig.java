@@ -21,7 +21,6 @@ public final class BlackFlashConfig {
     // 伤害与击退
     public final ModConfigSpec.ConfigValue<Double> emptyHandFloor;
     public final ModConfigSpec.ConfigValue<Integer> damageCap;
-    public final ModConfigSpec.ConfigValue<Boolean> armorApplies;
     public final ModConfigSpec.ConfigValue<Double> blackflashKnockback;
 
     // 无我境界
@@ -66,10 +65,9 @@ public final class BlackFlashConfig {
         b.pop();
 
         b.comment("伤害与击退").push("damage");
-        emptyHandFloor = b.comment("空手伤害保底基数").define("emptyHandFloor", 2.0);
-        damageCap = b.comment("伤害上限，0 = 不封顶").define("damageCap", 0);
-        armorApplies = b.comment("黑闪伤害是否经过护甲（v1 恒为 false：注入点在护甲减免之后）")
-                .define("armorApplies", false);
+        emptyHandFloor = b.comment("伤害保底基数：低于此值的命中按此值计算（空手约为 1）")
+                .define("emptyHandFloor", 2.0);
+        damageCap = b.comment("黑闪伤害上限（减免前），0 = 不封顶").define("damageCap", 0);
         blackflashKnockback = b.comment("额外击退强度（原版冲刺攻击约 0.5）").define("blackflashKnockback", 0.3);
         b.pop();
 
