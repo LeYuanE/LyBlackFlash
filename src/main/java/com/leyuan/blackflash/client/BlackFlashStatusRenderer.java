@@ -15,9 +15,11 @@ public final class BlackFlashStatusRenderer {
     private static final int MUGA_LIGHT = 0xFFC9F5FF;
     private static final int COMBO_DARK = 0xFF5A0D14;
     private static final int COMBO_LIGHT = 0xFFF06A5F;
+    private static final int INK_EDGE = 0xFF5A0D14;
     private static final int EMPTY_COLOR = 0xFF160A0D;
-    private static final int FRAME_DARK = 0xFF080306;
-    private static final int FRAME_LIGHT = 0xFFAE2524;
+    // 每一行的左右缺口，形成被撕开的墨迹边缘；全部在 81×9 外框内。
+    private static final int[] LEFT_INSET = {3, 1, 0, 2, 1, 0, 2, 1, 3};
+    private static final int[] RIGHT_INSET = {3, 0, 1, 2, 0, 1, 2, 1, 3};
 
     private BlackFlashStatusRenderer() {}
 
@@ -65,22 +67,30 @@ public final class BlackFlashStatusRenderer {
 
     private static void drawSegment(GuiGraphics gfx, int x, int y, int width, double progress,
                                     int darkColor, int lightColor) {
-        // 内嵌暗槽 + 1px 外框 + 1px 顶部高光：保留原版九像素高度，
-        // 但让它看起来像黑闪术式的能量槽，而不是纯色矩形。
-        gfx.fill(x, y, x + width, y + BAR_HEIGHT, FRAME_DARK);
-        gfx.fill(x + 1, y + 1, x + width - 1, y + BAR_HEIGHT - 1, EMPTY_COLOR);
+        // 先铺墨色底槽，再逐行按缺口裁剪。不会向轮廓外绘制阴影或高光。
         int filled = (int) Math.ceil((width - 2) * Math.clamp(progress, 0.0, 1.0));
-        if (filled > 0) {
-            int fillX = x + 1;
-            int fillEnd = fillX + filled;
+        for (int row = 0; row < BAR_HEIGHT; row++) {
+            int left = x + LEFT_INSET[row];
+            int right = x + width - RIGHT_INSET[row];
+            gfx.fill(left, y + row, right, y + row + 1, INK_EDGE);
+            int innerLeft = left + 1;
+            int innerRight = right - 1;
+            if (innerRight <= innerLeft) continue;
+            gfx.fill(innerLeft, y + row, innerRight, y + row + 1, EMPTY_COLOR);
+            if (filled <= 0) continue;
+
+            int fillEnd = Math.min(innerRight, innerLeft + filled);
             int split = Math.max(1, filled / 3);
-            gfx.fill(fillX, y + 1, fillX + split, y + BAR_HEIGHT - 1, darkColor);
-            gfx.fill(fillX + split, y + 1, fillEnd, y + BAR_HEIGHT - 1, lightColor);
-            // 细亮边只在仍有能量时出现，随进度自然缩短。
-            gfx.fill(fillX, y + 1, fillEnd, y + 2, lighten(lightColor));
+            gfx.fill(innerLeft, y + row, Math.min(fillEnd, innerLeft + split), y + row + 1, darkColor);
+            if (fillEnd > innerLeft + split) {
+                gfx.fill(innerLeft + split, y + row, fillEnd, y + row + 1, lightColor);
+            }
+            // 仅在填充内部放一条 1px 高光，不越过 jagged 轮廓。
+            if (row == 1 && fillEnd > innerLeft) {
+                gfx.fill(innerLeft, y + row, fillEnd, y + row + 1, lighten(lightColor));
+            }
         }
-        gfx.fill(x + 1, y, x + width - 1, y + 1, FRAME_LIGHT);
-        gfx.fill(x + 1, y + BAR_HEIGHT - 1, x + width - 1, y + BAR_HEIGHT, FRAME_DARK);
+        // 分界只由左右颜色自然相遇，不额外画竖线。
     }
 
     private static int lighten(int color) {
