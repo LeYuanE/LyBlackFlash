@@ -123,7 +123,6 @@ public final class ClientFx {
         syncStatusLifecycle();
         if (Minecraft.getInstance().options.hideGui) return;
         MugaPulseRenderer.render(gfx, tracker);
-        BlackFlashStatusRenderer.render(gfx, tracker);
         FloatingTextRenderer.render(gfx, tracker);
         ScreenFx.renderVictimOverlay(gfx, tracker);
         ScreenFx.renderNearMiss(gfx, tracker);

@@ -10,7 +10,7 @@ import java.util.Locale;
 /** 只读熟练度面板：没有容器、按钮或客户端状态写入，也不会暂停世界。 */
 public final class BlackFlashStatsScreen extends Screen {
     private static final int PANEL_WIDTH = 300;
-    private static final int PANEL_HEIGHT = 224;
+    private static final int PANEL_HEIGHT = 160;
     private static final int PADDING = 14;
     private static final int TEXT = 0xFFF0DDDA;
     private static final int MUTED = 0xFFB9A5A2;
@@ -37,7 +37,7 @@ public final class BlackFlashStatsScreen extends Screen {
         super.render(gfx, mouseX, mouseY, partialTick);
         if (width <= 16 || height <= 16) return;
 
-        // 小窗口与较大的 GUI 缩放也保持整块面板可见，不裁掉计时行或 ESC 提示。
+        // GUI 缩放与小窗口下保持四行信息和关闭提示完整可见。
         float scale = Math.min(1.0F, Math.min((width - 16.0F) / PANEL_WIDTH, (height - 16.0F) / PANEL_HEIGHT));
         float x = (width - PANEL_WIDTH * scale) / 2.0F;
         float y = (height - PANEL_HEIGHT * scale) / 2.0F;
@@ -51,12 +51,12 @@ public final class BlackFlashStatsScreen extends Screen {
             gfx.fill(PADDING, 31, PANEL_WIDTH - PADDING, 32, 0xFF632020);
 
             if (!BlackFlashClientState.hasStatus()) {
-                gfx.drawCenteredString(font, text("syncing", "正在同步服务器数据…"), PANEL_WIDTH / 2, 101, MUTED);
+                gfx.drawCenteredString(font, text("syncing", "正在同步服务器数据…"), PANEL_WIDTH / 2, 76, MUTED);
             } else {
                 renderStats(gfx);
             }
-            gfx.fill(PADDING, 194, PANEL_WIDTH - PADDING, 195, 0xFF342020);
-            gfx.drawCenteredString(font, text("close", "ESC 关闭 · 世界不会暂停"), PANEL_WIDTH / 2, 205, MUTED);
+            gfx.fill(PADDING, PANEL_HEIGHT - 30, PANEL_WIDTH - PADDING, PANEL_HEIGHT - 29, 0xFF342020);
+            gfx.drawCenteredString(font, text("close", "ESC 关闭 · 世界不会暂停"), PANEL_WIDTH / 2, PANEL_HEIGHT - 19, MUTED);
         } finally {
             gfx.pose().popPose();
         }
@@ -65,27 +65,10 @@ public final class BlackFlashStatsScreen extends Screen {
     private void renderStats(GuiGraphics gfx) {
         var status = BlackFlashClientState.snapshot();
         int count = status.count();
-        drawRow(gfx, text("count", "累计黑闪"), String.format(Locale.ROOT, "%,d", count), 44, TEXT);
-        drawRow(gfx, text("tier", "段位"), ChanceTable.tier(count).getString(), 65, ACCENT);
+        drawRow(gfx, text("tier", "熟练度"), ChanceTable.tier(count).getString(), 44, ACCENT);
+        drawRow(gfx, text("count", "累计黑闪"), String.format(Locale.ROOT, "%,d", count), 65, TEXT);
         drawRow(gfx, text("base_chance", "基础概率"), chance(status.baseChance()), 86, TEXT);
-        drawRow(gfx, text("effective_chance", "实际概率"), chance(status.effectiveChance()), 107, ACCENT);
-
-        double streakTicks = BlackFlashClientState.streakRemainingTicks();
-        boolean streakActive = status.streak() > 0 && streakTicks > 0.0;
-        String streak = streakActive
-                ? "x" + status.streak() + " · " + BlackFlashStatusRenderer.seconds(streakTicks)
-                : text("inactive", "未激活");
-        drawRow(gfx, text("combo", "连击"), streak, 128, streakActive ? TEXT : MUTED);
-
-        double mugaTicks = BlackFlashClientState.mugaRemainingTicks();
-        boolean mugaActive = status.mugaStacks() > 0 && mugaTicks > 0.0;
-        String muga = mugaActive
-                ? Component.translatableWithFallback("screen.black_flash.stats.muga_value", "%s 层 · %s · %s",
-                        status.mugaStacks(), BlackFlashStatusRenderer.multiplier(status.mugaMultiplier()),
-                        BlackFlashStatusRenderer.seconds(mugaTicks)).getString()
-                : text("inactive", "未激活");
-        drawRow(gfx, text("muga", "无我境界"), muga, 149, mugaActive ? TEXT : MUTED);
-        drawRow(gfx, text("daily_count", "今日黑闪"), String.format(Locale.ROOT, "%,d", status.dailyCount()), 170, TEXT);
+        drawRow(gfx, text("daily_count", "今日黑闪"), String.format(Locale.ROOT, "%,d", status.dailyCount()), 107, TEXT);
     }
 
     private void drawRow(GuiGraphics gfx, String label, String value, int y, int color) {

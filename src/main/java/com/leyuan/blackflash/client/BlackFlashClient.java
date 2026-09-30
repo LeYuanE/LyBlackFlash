@@ -6,6 +6,7 @@ import net.minecraft.client.KeyMapping;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 
 /**
@@ -27,6 +28,9 @@ public final class BlackFlashClient {
 
     @SubscribeEvent
     public static void onRegisterLayers(RegisterGuiLayersEvent event) {
+        // 瞬时演出保持 above-all；状态条插在 FOOD_LEVEL 之后，正好占用饱食度上方的一行。
         event.registerAboveAll(BlackFlash.rl("blackflash_hud"), ClientFx::renderHud);
+        event.registerAbove(VanillaGuiLayers.FOOD_LEVEL,
+                BlackFlash.rl("blackflash_status_bar"), BlackFlashStatusRenderer::render);
     }
 }
