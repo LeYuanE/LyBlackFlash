@@ -12,6 +12,23 @@ neoForge {
     mods { "${mod_id}" { sourceSet(sourceSets.main) } }
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+sourceSets {
+    geometryTest {
+        java.srcDir 'src/main/java'
+        java.include 'com/leyuan/blackflash/client/FlashGeometry.java'
+        java.include 'com/leyuan/blackflash/client/FxClock.java'
+        java.include 'com/leyuan/blackflash/client/FlashGeometryChecks.java'
+    }
+}
+tasks.register('geometryTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks seeded lightning geometry and animation without loading Minecraft.'
+    dependsOn tasks.named('geometryTestClasses')
+    classpath = sourceSets.geometryTest.runtimeClasspath
+    mainClass = 'com.leyuan.blackflash.client.FlashGeometryChecks'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn tasks.named('geometryTest') }
 processResources {
     def props = [minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
                  neo_version: neo_version, loader_version_range: loader_version_range,

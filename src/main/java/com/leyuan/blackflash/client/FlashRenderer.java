@@ -2,209 +2,311 @@ package com.leyuan.blackflash.client;
 
 import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.config.BlackFlashConfig;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 世界层闪电：黑心 + 红边的放射状折线，种子驱动、全场可见。
- *
- * 不用原版粒子（粒子基元是"点"，画不出折线，也做不了双色描边）。
- * 这里以自定义几何直接叠两层四边形：宽的红边一层、窄的黑心一层。
- * 渲染管线用 debugQuads：POSITION_COLOR 四边形、标准 alpha 混合、不剔除背面、输出主画面缓冲。
- * （不用原版闪电管线：它是"加法混合 + 天气缓冲层"，黑色在加法混合下画不出颜色，
- *   且内容要经后处理链合成，实测整条特效看不见。）
- */
+/** 世界层黑闪：缓存折线、连续锥形笔触，红色晕光 / 红边 / 黑心分别整批提交。 */
 @EventBusSubscriber(modid = BlackFlash.MOD_ID, value = Dist.CLIENT)
 public final class FlashRenderer {
     private FlashRenderer() {}
 
-    /** 配色：黑心 #0A0303、红边 #AE2524、亮红 #D43732（点缀） */
-    private static final int[] CORE = {10, 3, 3};
-    private static final int[] EDGE = {174, 37, 36};
-    private static final int[] EDGE_BRIGHT = {212, 55, 50};
-
-    private static final int BRANCHES = 14;
-    private static final int SEGMENTS = 8;
-
-    private record Flash(Vec3 hit, Vec3 fist, long seed, long birthMs) {}
-
+    private static final int MAX_FLASHES = 24;
+    private static final double MAX_DISTANCE_SQUARED = 64 * 64;
     private static final List<Flash> FLASHES = new ArrayList<>();
+    private static ClientLevel activeLevel;
 
-    public static synchronized void spawn(Vec3 hit, Vec3 fist, long seed) {
-        FLASHES.add(new Flash(hit, fist, seed, System.currentTimeMillis()));
+    private static final class RenderTypes {
+        static final RenderType GLOW = create("black_flash_glow", true);
+        static final RenderType EDGE = create("black_flash_edge", false);
+        static final RenderType CORE = create("black_flash_core", false);
+
+        /**
+         * 三层都输出到 <b>主目标</b>，而不是 {@code PARTICLES_TARGET}。
+         *
+         * <p>原因：粒子目标在 Fabulous 下会被清空并拷入不透明深度，而我们不做深度写入，
+         * 于是闪电在粒子缓冲里的深度是「背后墙面的深度」。后续
+         * {@code transparency.fsh} 用这份深度做远近排序，会把位于闪电之后的玻璃、水
+         * 合成到闪电之前 —— 前景的黑闪被身后的半透明物体盖住。
+         *
+         * <p>留在主目标上，深度测试直接对真实场景深度生效：遮挡关系始终正确，也不参与
+         * 粒子层的排序。代价是不走 Fabulous 的透明合成，属于可接受的取舍。
+         */
+        private static RenderType create(String name, boolean additive) {
+            return RenderType.create(name, DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS,
+                    8192, false, false, RenderType.CompositeState.builder()
+                            .setShaderState(RenderStateShard.POSITION_COLOR_SHADER)
+                            .setTransparencyState(additive ? RenderStateShard.LIGHTNING_TRANSPARENCY
+                                    : RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+                            .setCullState(RenderStateShard.NO_CULL)
+                            .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
+                            .setWriteMaskState(RenderStateShard.COLOR_WRITE)
+                            .createCompositeState(false));
+        }
+    }
+
+    private static final class Flash {
+        final Vec3 hit;
+        final double birthTick;
+        final FlashGeometry.Timing timing;
+        final List<Ribbon> ribbons;
+        final AABB bounds;
+        boolean visible;
+
+        Flash(Vec3 hit, Vec3 fist, long seed, double birthTick, FlashGeometry.Timing timing) {
+            this.hit = hit;
+            this.birthTick = birthTick;
+            this.timing = timing;
+            Vec3 offset = fist.subtract(hit);
+            ribbons = FlashGeometry.create(seed, offset.x, offset.y, offset.z).stream()
+                    .map(Ribbon::new).toList();
+            bounds = new AABB(hit, hit).inflate(6);
+        }
+
+        double age(double nowTick) {
+            return Math.max(0, (nowTick - birthTick) * 50);
+        }
+    }
+
+    private static final class Ribbon {
+        final FlashGeometry.Bolt bolt;
+        final double[] x, y, z, sideX, sideY, sideZ, width, alpha;
+        int count;
+
+        Ribbon(FlashGeometry.Bolt bolt) {
+            this.bolt = bolt;
+            int size = bolt.points().size();
+            x = new double[size]; y = new double[size]; z = new double[size];
+            sideX = new double[size]; sideY = new double[size]; sideZ = new double[size];
+            width = new double[size]; alpha = new double[size];
+        }
+
+        void prepare(Vec3 origin, Vec3 camera, FlashGeometry.Timing timing, double age, double progress) {
+            count = 0;
+            var points = bolt.points();
+            if (progress <= points.getFirst().reveal()) return;
+            double ox = origin.x - camera.x, oy = origin.y - camera.y, oz = origin.z - camera.z;
+            double scale = timing.widthScale(age);
+            for (int i = 0; i < points.size(); i++) {
+                var point = points.get(i);
+                if (point.reveal() <= progress) {
+                    double tipWidth = i == points.size() - 1 ? 1 : Math.clamp(
+                            (progress - point.reveal()) / (points.get(i + 1).reveal() - point.reveal()), 0, 1);
+                    set(i, point.x() + ox, point.y() + oy, point.z() + oz,
+                            point.halfWidth() * scale * tipWidth, timing.alpha(age, point.reveal()));
+                } else {
+                    var previous = points.get(i - 1);
+                    double t = (progress - previous.reveal()) / (point.reveal() - previous.reveal());
+                    if (t > 1.0e-6) {
+                        set(i, previous.x() + (point.x() - previous.x()) * t + ox,
+                                previous.y() + (point.y() - previous.y()) * t + oy,
+                                previous.z() + (point.z() - previous.z()) * t + oz,
+                                0, timing.alpha(age, progress));
+                    }
+                    break;
+                }
+            }
+            if (count < 2) return;
+            if (progress < points.getLast().reveal()) width[count - 1] = 0;
+
+            // 相邻段共用接缝顶点；三种材质复用同一帧的相机朝向与截断结果。
+            for (int i = 0; i < count; i++) {
+                int before = Math.max(0, i - 1), after = Math.min(count - 1, i + 1);
+                double dx = x[after] - x[before], dy = y[after] - y[before], dz = z[after] - z[before];
+                double sx = dz * y[i] - dy * z[i];
+                double sy = dx * z[i] - dz * x[i];
+                double sz = dy * x[i] - dx * y[i];
+                double length = Math.sqrt(sx * sx + sy * sy + sz * sz);
+                if (length < 1.0e-8) {
+                    if (Math.abs(dy) < Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.9) {
+                        sx = -dz; sy = 0; sz = dx;
+                    } else {
+                        sx = 0; sy = dz; sz = -dy;
+                    }
+                    length = Math.sqrt(sx * sx + sy * sy + sz * sz);
+                }
+                if (length < 1.0e-8) { sx = 1; sy = 0; sz = 0; length = 1; }
+                if (i > 0 && sx * sideX[i - 1] + sy * sideY[i - 1] + sz * sideZ[i - 1] < 0) {
+                    length = -length;
+                }
+                sideX[i] = sx / length;
+                sideY[i] = sy / length;
+                sideZ[i] = sz / length;
+            }
+        }
+
+        private void set(int i, double px, double py, double pz, double halfWidth, double opacity) {
+            x[i] = px; y[i] = py; z[i] = pz;
+            width[i] = halfWidth; alpha[i] = opacity;
+            count = i + 1;
+        }
+
+        void draw(VertexConsumer consumer, Matrix4f pose, double size, int red, int green, int blue,
+                  double opacity, boolean glow) {
+            for (int i = 1; i < count; i++) {
+                if (Math.max(alpha[i - 1], alpha[i]) * opacity < 1.0 / 255) continue;
+                if (glow) {
+                    // 从细红边到透明外沿，避免宽实心红带吞掉黑色笔触。
+                    quad(consumer, pose, i, 1.08, size, 0.18 * opacity, 0, red, green, blue);
+                    quad(consumer, pose, i, -size, -1.08, 0, 0.18 * opacity, red, green, blue);
+                } else {
+                    quad(consumer, pose, i, -size, size, opacity, opacity, red, green, blue);
+                }
+            }
+        }
+
+        private void quad(VertexConsumer consumer, Matrix4f pose, int i, double left, double right,
+                          double leftAlpha, double rightAlpha, int red, int green, int blue) {
+            vertex(consumer, pose, i - 1, left, leftAlpha, red, green, blue);
+            vertex(consumer, pose, i - 1, right, rightAlpha, red, green, blue);
+            vertex(consumer, pose, i, right, rightAlpha, red, green, blue);
+            vertex(consumer, pose, i, left, leftAlpha, red, green, blue);
+        }
+
+        private void vertex(VertexConsumer consumer, Matrix4f pose, int i, double side, double opacity,
+                            int red, int green, int blue) {
+            double offset = width[i] * side;
+            consumer.addVertex(pose, (float) (x[i] + sideX[i] * offset),
+                            (float) (y[i] + sideY[i] * offset), (float) (z[i] + sideZ[i] * offset))
+                    .setColor(red, green, blue, (int) Math.clamp(alpha[i] * opacity * 255, 0, 255));
+        }
+    }
+
+    /**
+     * 仅客户端主线程调用；包处理通过 enqueueWork 进入，渲染与 tick 不并发。
+     *
+     * <p>出生时刻取单调特效时钟的当前值（不是世界时间）：世界时间会被服务器同步包
+     * 覆盖，用它当基准会让正在播放的闪电在卡顿同步后倒退或重新播放。
+     */
+    public static void spawn(Vec3 hit, Vec3 fist, long seed) {
+        var mc = Minecraft.getInstance();
+        syncLevel(mc.level);
+        if (activeLevel == null || !finite(hit) || !finite(fist)) return;
+        if (mc.gameRenderer.getMainCamera().getPosition().distanceToSqr(hit) > MAX_DISTANCE_SQUARED) return;
+        FxClock.advance(worldTicks(mc), 0, true);
+        double birthTick = FxClock.birth();
+        expire(FxClock.now());
+        if (FLASHES.size() >= MAX_FLASHES) FLASHES.removeFirst();
+        var cfg = BlackFlashConfig.CONFIG;
+        FLASHES.add(new Flash(hit, fist, seed, birthTick,
+                new FlashGeometry.Timing(cfg.flashStartMs.get(), cfg.flashSpreadMs.get(), cfg.flashFadeMs.get())));
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        var mc = Minecraft.getInstance();
+        syncLevel(mc.level);
+        if (activeLevel == null) return;
+        // 每个客户端刻推进一次，并处理服务器时间同步造成的倒退。
+        FxClock.advance(worldTicks(mc), 1.0, !FxClock.isRewind(worldTicks(mc) + 1.0));
+        expire(FxClock.now());
+    }
+
+    /** 当前世界时间（含帧插值），用作特效时钟的唯一输入。 */
+    private static double worldTicks(Minecraft mc) {
+        if (activeLevel == null) return FxClock.now();
+        return activeLevel.getGameTime() + mc.getTimer().getGameTimeDeltaPartialTick(true);
+    }
+
+    private static void syncLevel(ClientLevel level) {
+        if (activeLevel != level) {
+            FLASHES.clear();
+            FxClock.reset();
+            activeLevel = level;
+        }
+    }
+
+    private static void expire(double nowTick) {
+        for (int i = FLASHES.size() - 1; i >= 0; i--) {
+            Flash flash = FLASHES.get(i);
+            if (flash.age(nowTick) >= flash.timing.lifetimeMs()) FLASHES.remove(i);
+        }
     }
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
-
-        List<Flash> alive;
-        BlackFlashConfig cfgPre = BlackFlashConfig.CONFIG;
-        long total = cfgPre.flashStartMs.get() + cfgPre.flashSpreadMs.get() + cfgPre.flashFadeMs.get();
-        long now0 = System.currentTimeMillis();
-        synchronized (FLASHES) {
-            if (FLASHES.isEmpty()) return;
-            FLASHES.removeIf(f -> now0 - f.birthMs() > total);
-            alive = new ArrayList<>(FLASHES);
+        var mc = Minecraft.getInstance();
+        syncLevel(mc.level);
+        double nowTick = 0;
+        if (activeLevel != null) {
+            double worldTicks = worldTicks(mc);
+            // 帧内只补充插值增量；世界时间倒退（服务器同步倒流）时递增不受影响。
+            FxClock.advance(worldTicks, event.getPartialTick().getGameTimeDeltaPartialTick(true), true);
+            nowTick = FxClock.now();
+            expire(nowTick);
         }
-        if (alive.isEmpty()) return;
+        if (FLASHES.isEmpty()) return;
+        Vec3 camera = event.getCamera().getPosition();
+        boolean anyVisible = false;
+        for (Flash flash : FLASHES) {
+            flash.visible = camera.distanceToSqr(flash.hit) <= MAX_DISTANCE_SQUARED
+                    && event.getFrustum().isVisible(flash.bounds);
+            if (!flash.visible) continue;
+            anyVisible = true;
+            double age = flash.age(nowTick), progress = flash.timing.progress(age);
+            for (Ribbon ribbon : flash.ribbons) ribbon.prepare(flash.hit, camera, flash.timing, age, progress);
+        }
+        if (!anyVisible) return;
 
-        BlackFlashConfig cfg = BlackFlashConfig.CONFIG;
+        Matrix4f pose = event.getPoseStack().last().pose();
         MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
-        RenderType boltType = RenderType.debugQuads();
-        VertexConsumer vc = buffers.getBuffer(boltType);
-        Matrix4f view = new Matrix4f(event.getModelViewMatrix());
-        Vec3 cam = event.getCamera().getPosition();
-        long now = System.currentTimeMillis();
-
-        for (Flash f : alive) {
-            drawFlash(vc, view, cam, f, now, cfg);
-        }
-        buffers.endBatch(boltType);
+        drawPass(buffers, pose, RenderTypes.GLOW, 0);
+        drawPass(buffers, pose, RenderTypes.EDGE, 1);
+        drawPass(buffers, pose, RenderTypes.CORE, 2);
     }
 
-    private static void drawFlash(VertexConsumer vc, Matrix4f view, Vec3 cam,
-                                  Flash f, long now, BlackFlashConfig cfg) {
-        long age = now - f.birthMs();
-        int start = cfg.flashStartMs.get();
-        int spread = cfg.flashSpreadMs.get();
-        int fade = cfg.flashFadeMs.get();
-
-        // 0–start 炸开（短粗）→ start+spread 蔓延 → 之后退散
-        double lenFrac;
-        if (age <= start) {
-            lenFrac = 0.15 + 0.2 * (age / (double) start);
-        } else {
-            lenFrac = Math.min(1.0, 0.35 + 0.65 * ((age - start) / (double) spread));
-        }
-
-        double fadeBase = start + spread;
-
-        for (int i = 0; i < BRANCHES; i++) {
-            // 双中心：奇数分支从拳头位置起
-            Vec3 origin = (i % 2 == 0) ? f.hit() : f.fist();
-
-            // 出生错开：先出生的先淡出
-            double birthDelay = (i / (double) BRANCHES) * spread * 0.3;
-            if (age < birthDelay) continue;
-
-            double fadeStart = fadeBase + i * (fade * 0.25 / BRANCHES) + birthDelay;
-            double alpha = age <= fadeStart ? 1.0 : Math.max(0.0, 1.0 - (age - fadeStart) / (double) fade);
-            if (alpha <= 0.01) continue;
-            int a255 = (int) (alpha * 255.0);
-
-            RandomSource rng = RandomSource.create(f.seed() * 31L + i);
-            double[][] pts = new double[SEGMENTS + 1][3];
-            pts[0][0] = origin.x;
-            pts[0][1] = origin.y;
-            pts[0][2] = origin.z;
-
-            // 随机初始方向（偏上半球少一点，整体放射）
-            double theta = rng.nextDouble() * Math.PI * 2.0;
-            double phi = Math.acos(2.0 * rng.nextDouble() - 1.0);
-            double dx = Math.sin(phi) * Math.cos(theta);
-            double dy = Math.cos(phi);
-            double dz = Math.sin(phi) * Math.sin(theta);
-
-            int visible = Math.max(1, (int) Math.ceil(SEGMENTS * lenFrac));
-            double px = origin.x, py = origin.y, pz = origin.z;
-            for (int s = 1; s <= SEGMENTS; s++) {
-                double len = 0.25 + rng.nextDouble() * 0.55;
-                // 折线抖动：随机方向扰动后归一化
-                double jx = dx + (rng.nextDouble() - 0.5) * 0.9;
-                double jy = dy + (rng.nextDouble() - 0.5) * 0.9;
-                double jz = dz + (rng.nextDouble() - 0.5) * 0.9;
-                double jl = Math.sqrt(jx * jx + jy * jy + jz * jz);
-                if (jl < 1e-6) jl = 1.0;
-                jx /= jl; jy /= jl; jz /= jl;
-                px += jx * len;
-                py += jy * len;
-                pz += jz * len;
-                pts[s][0] = px; pts[s][1] = py; pts[s][2] = pz;
-                dx = jx; dy = jy; dz = jz;
-                if (s >= visible) break;
+    private static void drawPass(MultiBufferSource.BufferSource buffers, Matrix4f pose, RenderType type, int pass) {
+        // 自定义材质共用 sharedBuffer；必须整批提交，不能交替持有失效的 VertexConsumer。
+        VertexConsumer consumer = buffers.getBuffer(type);
+        for (Flash flash : FLASHES) {
+            if (!flash.visible) continue;
+            for (Ribbon ribbon : flash.ribbons) {
+                if (pass == 0) ribbon.draw(consumer, pose, 2.3, 212, 30, 27, ribbon.bolt.energy(), true);
+                else if (pass == 1) ribbon.draw(consumer, pose, 1.14, 174, 25, 27, 0.94, false);
+                else ribbon.draw(consumer, pose, 0.86, 10, 3, 3, 1, false);
             }
-
-            // 先红边（宽），后黑心（窄）：两层几何叠加出双色描边
-            int[] edgeCol = (i % 3 == 0) ? EDGE_BRIGHT : EDGE;
-            stroke(vc, view, cam, pts, visible, 0.13f, edgeCol, a255);
-            stroke(vc, view, cam, pts, visible, 0.055f, CORE, a255);
         }
+        buffers.endBatch(type);
     }
 
-    /**
-     * 以相机朝向为 billboard 侧向，把折线画成一串共面四边形。
-     *
-     * <p><b>坐标空间</b>：event.getModelViewMatrix() 只含相机【旋转】（GameRenderer 用
-     * {@code new Matrix4f().rotation(quaternionf)} 构造，没有平移分量），
-     * 所以顶点必须传【相机相对坐标】= 世界坐标 − 相机位置。
-     * 传世界坐标会把几何画到离相机「坐标数值」那么远的地方，直接超出渲染距离而完全不可见。
-     */
-    private static void stroke(VertexConsumer vc, Matrix4f view, Vec3 cam,
-                               double[][] pts, int segs, float halfWidth, int[] rgb, int alpha) {
-        if (segs < 1) return;
-        for (int s = 1; s <= segs; s++) {
-            // 世界坐标 → 相机相对坐标
-            double ax = pts[s - 1][0] - cam.x, ay = pts[s - 1][1] - cam.y, az = pts[s - 1][2] - cam.z;
-            double bx = pts[s][0] - cam.x, by = pts[s][1] - cam.y, bz = pts[s][2] - cam.z;
-
-            double dx = bx - ax, dy = by - ay, dz = bz - az;
-            double dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dl < 1e-6) continue;
-            dx /= dl; dy /= dl; dz /= dl;
-
-            // 相机在相对空间里位于原点
-            double mx = (ax + bx) * 0.5;
-            double my = (ay + by) * 0.5;
-            double mz = (az + bz) * 0.5;
-            double ml = Math.sqrt(mx * mx + my * my + mz * mz);
-            if (ml < 1e-6) { mx = 0; my = 1; mz = 0; ml = 1; }
-            mx /= ml; my /= ml; mz /= ml;
-
-            // side = dir × toCam
-            double sx = dy * mz - dz * my;
-            double sy = dz * mx - dx * mz;
-            double sz = dx * my - dy * mx;
-            double sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
-            if (sl < 1e-6) { sx = halfWidth; sy = 0; sz = 0; }
-            else { sx = sx / sl * halfWidth; sy = sy / sl * halfWidth; sz = sz / sl * halfWidth; }
-
-            vc.addVertex(view, (float) (ax + sx), (float) (ay + sy), (float) (az + sz))
-              .setColor(rgb[0], rgb[1], rgb[2], alpha);
-            vc.addVertex(view, (float) (ax - sx), (float) (ay - sy), (float) (az - sz))
-              .setColor(rgb[0], rgb[1], rgb[2], alpha);
-            vc.addVertex(view, (float) (bx - sx), (float) (by - sy), (float) (bz - sz))
-              .setColor(rgb[0], rgb[1], rgb[2], alpha);
-            vc.addVertex(view, (float) (bx + sx), (float) (by + sy), (float) (bz + sz))
-              .setColor(rgb[0], rgb[1], rgb[2], alpha);
-        }
-    }
-
-    /** 拳头位置：攻击者眼睛前 0.6 格；找不到实体时退回命中点 */
+    /** 近似持械手位置，不读取第一人称专用骨骼，旁观者也能生成第二起点。 */
     public static Vec3 fistPosition(int attackerId, Vec3 fallback) {
         var level = Minecraft.getInstance().level;
         if (level == null) return fallback;
         Entity attacker = level.getEntity(attackerId);
         if (attacker == null) return fallback;
-        Vec3 eye = attacker.getEyePosition();
         Vec3 look = attacker.getLookAngle();
-        return eye.add(look.x * 0.6, look.y * 0.6, look.z * 0.6);
+        Vec3 right = look.cross(new Vec3(0, 1, 0)).normalize();
+        double hand = attacker instanceof LivingEntity living && living.getMainArm() == HumanoidArm.LEFT ? -1 : 1;
+        return attacker.getEyePosition().add(look.scale(0.65)).add(right.scale(hand * 0.22)).add(0, -0.25, 0);
     }
 
-    public static synchronized void clear() {
+    private static boolean finite(Vec3 point) {
+        return Double.isFinite(point.x) && Double.isFinite(point.y) && Double.isFinite(point.z);
+    }
+
+    public static void clear() {
         FLASHES.clear();
+        activeLevel = null;
     }
 }
