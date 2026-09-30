@@ -26,10 +26,12 @@ public final class BlackFlashConfig {
 
     // 无我境界
     public final ModConfigSpec.ConfigValue<Double> mugaMultiplier;
+    public final ModConfigSpec.ConfigValue<Long> mugaDurationMs;
     public final ModConfigSpec.ConfigValue<Integer> mugaMaxStacks;
     public final ModConfigSpec.ConfigValue<Boolean> mugaAddsProficiency;
 
     // 连击
+    public final ModConfigSpec.ConfigValue<Long> streakWindowMs;
     public final ModConfigSpec.ConfigValue<Boolean> streakBreakOnCritMiss;
 
     // 演出时长（毫秒）
@@ -73,13 +75,13 @@ public final class BlackFlashConfig {
 
         b.comment("无我境界").push("muga");
         mugaMultiplier = b.comment("无我概率倍率").define("mugaMultiplier", 1.2);
-        // 无我持续时长不是配置项：见 GrowthManager.MUGA_DURATION_MS
+        mugaDurationMs = b.comment("无我持续（毫秒，按游戏刻计：1 刻 = 50ms）").define("mugaDurationMs", 10000L);
         mugaMaxStacks = b.comment("无我叠加上限，0 = 无限").define("mugaMaxStacks", 0);
         mugaAddsProficiency = b.comment("无我是否计入熟练度").define("mugaAddsProficiency", false);
         b.pop();
 
         b.comment("连击").push("streak");
-        // 连击时间窗不是配置项：见 GrowthManager.STREAK_WINDOW_MS
+        streakWindowMs = b.comment("连击时间窗（毫秒，按游戏刻计）").define("streakWindowMs", 5000L);
         streakBreakOnCritMiss = b.comment("暴击命中但未触发时是否清零连击").define("streakBreakOnCritMiss", true);
         b.pop();
 
