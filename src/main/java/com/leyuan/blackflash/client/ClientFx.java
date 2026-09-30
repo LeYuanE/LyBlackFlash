@@ -15,20 +15,19 @@ public final class ClientFx {
 
     /** 由 NetworkHandler 在主线程调用 */
     public static void onEffect(BlackFlashEffectPayload p) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
         Vec3 hit = new Vec3(p.x(), p.y(), p.z());
         Vec3 fist = FlashRenderer.fistPosition(p.attackerId(), hit);
-        // 世界层闪电：所有玩家（含旁观者）都渲染
+        // 世界层闪电：同维度附近玩家（含旁观者）都渲染
         FlashRenderer.spawn(hit, fist, p.seed());
 
-        var mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            if (p.attackerId() == mc.player.getId()) {
-                FloatingTextRenderer.show();   // 飘字：仅触发者
-                CameraFx.kick();               // FOV 收缩：仅触发者
-            }
-            if (p.targetId() == mc.player.getId()) {
-                ScreenFx.onVictim();           // 被击中者红黑痕迹
-            }
+        if (p.attackerId() == mc.player.getId()) {
+            FloatingTextRenderer.show();   // 飘字：仅触发者
+            CameraFx.kick();               // FOV 收缩：仅触发者
+        }
+        if (p.targetId() == mc.player.getId()) {
+            ScreenFx.onVictim();           // 被击中者红黑痕迹
         }
     }
 

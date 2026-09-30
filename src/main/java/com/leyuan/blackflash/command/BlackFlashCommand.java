@@ -2,12 +2,16 @@ package com.leyuan.blackflash.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.attachment.BlackFlashAttachments;
 import com.leyuan.blackflash.config.BlackFlashConfig;
 import com.leyuan.blackflash.logic.ChanceTable;
 import com.leyuan.blackflash.logic.GrowthManager;
+import com.leyuan.blackflash.network.BlackFlashEffectPayload;
+import com.leyuan.blackflash.network.NetworkHandler;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -20,6 +24,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  * 调试指令（需要 OP 等级 2，可用配置整体禁用）：
  *   /blackflash set <n>   设定已打出次数
  *   /blackflash force     下一次暴击必定触发
+ *   /blackflash preview [seed]  在前方预览演出，不造成伤害或改变成长
  *   /blackflash reset     清零熟练度与连击
  *   /blackflash stats     显示次数 / 概率 / 段位 / 连击
  */
@@ -40,6 +45,10 @@ public final class BlackFlashCommand {
                         .then(Commands.argument("count", IntegerArgumentType.integer(0, 999999))
                                 .executes(BlackFlashCommand::setCount)))
                 .then(Commands.literal("force").executes(BlackFlashCommand::forceNext))
+                .then(Commands.literal("preview")
+                        .executes(ctx -> preview(ctx, player(ctx).getRandom().nextLong()))
+                        .then(Commands.argument("seed", LongArgumentType.longArg())
+                                .executes(ctx -> preview(ctx, LongArgumentType.getLong(ctx, "seed")))))
                 .then(Commands.literal("reset").executes(BlackFlashCommand::reset))
                 .then(Commands.literal("stats").executes(BlackFlashCommand::stats)));
     }
@@ -62,6 +71,16 @@ public final class BlackFlashCommand {
         ServerPlayer p = player(ctx);
         p.setData(BlackFlashAttachments.FORCE, 1);
         ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.force"), false);
+        return 1;
+    }
+
+    private static int preview(CommandContext<CommandSourceStack> ctx, long seed)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer p = player(ctx);
+        Vec3 hit = p.getEyePosition().add(p.getLookAngle().scale(3));
+        NetworkHandler.sendToNearbyPlayers(p.serverLevel(),
+                new BlackFlashEffectPayload(p.getId(), -1, hit.x, hit.y, hit.z, seed));
+        ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.preview", seed), false);
         return 1;
     }
 

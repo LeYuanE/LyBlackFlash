@@ -25,6 +25,7 @@
 
   "command.blackflash.set": "黑闪次数已设为 %s（基础概率 %s）",
   "command.blackflash.force": "下一次暴击必定触发黑闪",
+  "command.blackflash.preview": "已预览黑闪演出（种子 %s；不改变伤害、熟练度或连击）",
   "command.blackflash.reset": "熟练度与连击已清零",
   "command.blackflash.stats.count": "已打出黑闪：%s 次",
   "command.blackflash.stats.chance": "当前触发概率：%s",

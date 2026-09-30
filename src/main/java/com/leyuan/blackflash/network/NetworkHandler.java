@@ -6,11 +6,11 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * 网络包注册与收发。演出包发给所有在线玩家（含旁观者），保证闪电全场可见。
+ * 网络包注册与收发。演出包发给同维度附近玩家（含旁观者），不向其他世界投影闪电。
  * 本类由主类显式注册到模组总线。
  */
 public final class NetworkHandler {
@@ -25,10 +25,12 @@ public final class NetworkHandler {
                 NetworkHandler::handleNearMiss);
     }
 
-    /** 全场广播：每个在线玩家各发一份（旁观者也收得到） */
-    public static void sendToAllPlayers(MinecraftServer server, BlackFlashEffectPayload payload) {
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.connection.send(payload);
+    public static void sendToNearbyPlayers(ServerLevel level, BlackFlashEffectPayload payload) {
+        for (ServerPlayer player : level.players()) {
+            if (player.getId() == payload.attackerId() || player.getId() == payload.targetId()
+                    || player.distanceToSqr(payload.x(), payload.y(), payload.z()) <= 64 * 64) {
+                player.connection.send(payload);
+            }
         }
     }
 

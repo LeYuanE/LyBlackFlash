@@ -25,6 +25,7 @@
 
   "command.blackflash.set": "Black Flash count set to %s (base chance %s)",
   "command.blackflash.force": "The next critical hit is guaranteed to trigger a Black Flash",
+  "command.blackflash.preview": "Black Flash preview (seed %s; no damage, proficiency or streak changes)",
   "command.blackflash.reset": "Proficiency and streak have been reset",
   "command.blackflash.stats.count": "Black Flashes landed: %s",
   "command.blackflash.stats.chance": "Current chance: %s",
