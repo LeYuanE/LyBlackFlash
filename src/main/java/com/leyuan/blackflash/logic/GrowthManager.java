@@ -15,12 +15,28 @@ import java.util.UUID;
  *
  * <p>所有计时都用<b>游戏刻</b>（{@link Level#getGameTime()}）而不是现实墙钟：
  * 游戏刻随游戏推进，服务器暂停/卡顿时不会偷偷走完，
- * 与 /tick 冻结、单人暂停的行为一致。配置项仍以毫秒书写，这里换算。
+ * 与 /tick 冻结、单人暂停的行为一致。
  */
 public final class GrowthManager {
     private GrowthManager() {}
 
-    /** 每游戏刻的毫秒数（50ms/tick），用于把配置里的毫秒值换算成刻。 */
+    /**
+     * 连击时间窗：两次黑闪必须在这个时间内衔接才累加。
+     *
+     * <p>刻意<b>不做成配置项</b>：它是决定连击手感的核心参数，不是玩家偏好。
+     * 放进配置里会有两个问题——调平衡时已装玩家的旧值不会跟随更新；
+     * 而这个数值又直接决定伤害指数（{@code ^2.5^n}）能堆到多高，不宜由玩家单方面放宽。
+     */
+    public static final long STREAK_WINDOW_MS = 5_000L;
+
+    /**
+     * 无我境界持续时长（每次触发刷新计时）。
+     *
+     * <p>与 {@link #STREAK_WINDOW_MS} 同理，不做成配置项。
+     */
+    public static final long MUGA_DURATION_MS = 10_000L;
+
+    /** 每游戏刻的毫秒数（50ms/tick）。 */
     private static final long MS_PER_TICK = 50L;
 
     /** 毫秒 → 刻，至少 1 刻，避免 0 长窗口导致连击永远断开。 */
@@ -52,7 +68,7 @@ public final class GrowthManager {
         int streak = player.getData(BlackFlashAttachments.STREAK);
         if (streak <= 0) return 0;
         long at = player.getData(BlackFlashAttachments.STREAK_AT);
-        long window = toTicks(BlackFlashConfig.CONFIG.streakWindowMs.get());
+        long window = toTicks(STREAK_WINDOW_MS);
         return (gameTime(player) - at) <= window ? streak : 0;
     }
 
@@ -75,7 +91,7 @@ public final class GrowthManager {
         int max = cfg.mugaMaxStacks.get();
         if (max > 0) stacks = Math.min(stacks, max);
         player.setData(BlackFlashAttachments.MUGA_STACKS, stacks);
-        player.setData(BlackFlashAttachments.MUGA_UNTIL, now + toTicks(cfg.mugaDurationMs.get()));
+        player.setData(BlackFlashAttachments.MUGA_UNTIL, now + toTicks(MUGA_DURATION_MS));
 
         // 当日计数（按游戏日 24000 tick 滚动）
         long dayIndex = player.level().getDayTime() / 24000L;
