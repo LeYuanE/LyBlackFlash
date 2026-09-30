@@ -11,9 +11,13 @@ public final class BlackFlashStatusRenderer {
     private static final int BAR_HEIGHT = 9;
     private static final int MUGA_WIDTH = 54;
     private static final int COMBO_WIDTH = BAR_WIDTH - MUGA_WIDTH;
-    private static final int MUGA_COLOR = 0xFF9DEBFF;
-    private static final int COMBO_COLOR = 0xFFAE2524;
-    private static final int EMPTY_COLOR = 0xFF241316;
+    private static final int MUGA_DARK = 0xFF28586C;
+    private static final int MUGA_LIGHT = 0xFFC9F5FF;
+    private static final int COMBO_DARK = 0xFF5A0D14;
+    private static final int COMBO_LIGHT = 0xFFF06A5F;
+    private static final int EMPTY_COLOR = 0xFF160A0D;
+    private static final int FRAME_DARK = 0xFF080306;
+    private static final int FRAME_LIGHT = 0xFFAE2524;
 
     private BlackFlashStatusRenderer() {}
 
@@ -39,9 +43,11 @@ public final class BlackFlashStatusRenderer {
         if (x < 0 || x + BAR_WIDTH > gfx.guiWidth() || y < 0) return;
 
         drawSegment(gfx, x, y, MUGA_WIDTH, muga
-                ? durationProgress(mugaRemaining, status.mugaDurationTicks()) : 0.0, MUGA_COLOR);
+                ? durationProgress(mugaRemaining, status.mugaDurationTicks()) : 0.0,
+                MUGA_DARK, MUGA_LIGHT);
         drawSegment(gfx, x + MUGA_WIDTH, y, COMBO_WIDTH, combo
-                ? durationProgress(comboRemaining, status.streakDurationTicks()) : 0.0, COMBO_COLOR);
+                ? durationProgress(comboRemaining, status.streakDurationTicks()) : 0.0,
+                COMBO_DARK, COMBO_LIGHT);
     }
 
     private static boolean shouldShareFoodRow(Minecraft mc) {
@@ -57,9 +63,30 @@ public final class BlackFlashStatusRenderer {
         return Math.clamp(remaining / duration, 0.0, 1.0);
     }
 
-    private static void drawSegment(GuiGraphics gfx, int x, int y, int width, double progress, int color) {
-        gfx.fill(x, y, x + width, y + BAR_HEIGHT, EMPTY_COLOR);
-        int filled = (int) Math.ceil(width * Math.clamp(progress, 0.0, 1.0));
-        if (filled > 0) gfx.fill(x, y, x + filled, y + BAR_HEIGHT, color);
+    private static void drawSegment(GuiGraphics gfx, int x, int y, int width, double progress,
+                                    int darkColor, int lightColor) {
+        // 内嵌暗槽 + 1px 外框 + 1px 顶部高光：保留原版九像素高度，
+        // 但让它看起来像黑闪术式的能量槽，而不是纯色矩形。
+        gfx.fill(x, y, x + width, y + BAR_HEIGHT, FRAME_DARK);
+        gfx.fill(x + 1, y + 1, x + width - 1, y + BAR_HEIGHT - 1, EMPTY_COLOR);
+        int filled = (int) Math.ceil((width - 2) * Math.clamp(progress, 0.0, 1.0));
+        if (filled > 0) {
+            int fillX = x + 1;
+            int fillEnd = fillX + filled;
+            int split = Math.max(1, filled / 3);
+            gfx.fill(fillX, y + 1, fillX + split, y + BAR_HEIGHT - 1, darkColor);
+            gfx.fill(fillX + split, y + 1, fillEnd, y + BAR_HEIGHT - 1, lightColor);
+            // 细亮边只在仍有能量时出现，随进度自然缩短。
+            gfx.fill(fillX, y + 1, fillEnd, y + 2, lighten(lightColor));
+        }
+        gfx.fill(x + 1, y, x + width - 1, y + 1, FRAME_LIGHT);
+        gfx.fill(x + 1, y + BAR_HEIGHT - 1, x + width - 1, y + BAR_HEIGHT, FRAME_DARK);
+    }
+
+    private static int lighten(int color) {
+        int r = Math.min(255, ((color >> 16) & 0xFF) + 32);
+        int g = Math.min(255, ((color >> 8) & 0xFF) + 32);
+        int b = Math.min(255, (color & 0xFF) + 32);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 }
