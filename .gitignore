@@ -1,5 +1,7 @@
 build/
 .gradle/
 run/
+runs/
 logs/
 *.class
+*.log
