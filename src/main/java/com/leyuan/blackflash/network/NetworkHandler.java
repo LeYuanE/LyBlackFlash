@@ -1,6 +1,5 @@
 package com.leyuan.blackflash.network;
 
-import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.client.ClientFx;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -18,11 +17,15 @@ public final class NetworkHandler {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1");
+        PayloadRegistrar registrar = event.registrar("2");
         registrar.playToClient(BlackFlashEffectPayload.TYPE, BlackFlashEffectPayload.STREAM_CODEC,
                 NetworkHandler::handleEffect);
         registrar.playToClient(NearMissPayload.TYPE, NearMissPayload.STREAM_CODEC,
                 NetworkHandler::handleNearMiss);
+        registrar.playToClient(BlackFlashStatusPayload.TYPE, BlackFlashStatusPayload.STREAM_CODEC,
+                NetworkHandler::handleStatus);
+        registrar.playToClient(BlackFlashHitPayload.TYPE, BlackFlashHitPayload.STREAM_CODEC,
+                NetworkHandler::handleHit);
     }
 
     public static void sendToNearbyPlayers(ServerLevel level, BlackFlashEffectPayload payload) {
@@ -40,5 +43,13 @@ public final class NetworkHandler {
 
     private static void handleNearMiss(NearMissPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> ClientFx.onNearMiss(payload.attackerId()));
+    }
+
+    private static void handleStatus(BlackFlashStatusPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> ClientFx.onStatus(payload));
+    }
+
+    private static void handleHit(BlackFlashHitPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> ClientFx.onHit(payload));
     }
 }

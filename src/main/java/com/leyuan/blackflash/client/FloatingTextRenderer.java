@@ -1,6 +1,5 @@
 package com.leyuan.blackflash.client;
 
-import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.config.BlackFlashConfig;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.DeltaTracker;
@@ -16,10 +15,23 @@ import net.minecraft.network.chat.Component;
 public final class FloatingTextRenderer {
     private FloatingTextRenderer() {}
 
+    private static final float STREAK_SCALE = 0.65f;
+    private static final int STREAK_GAP = 4;
     private static volatile long startMs = -1L;
+    private static volatile int currentStreak = 1;
 
     public static void show() {
+        show(1);
+    }
+
+    public static void show(int streak) {
+        currentStreak = Math.max(1, streak);
         startMs = FxClock.gameMillis();
+    }
+
+    public static void clear() {
+        startMs = -1L;
+        currentStreak = 1;
     }
 
     public static void render(GuiGraphics gfx, DeltaTracker tracker) {
@@ -49,8 +61,13 @@ public final class FloatingTextRenderer {
         if (alpha < 4) return;
 
         Component text = Component.translatable("text.black_flash.name");
+        int streak = currentStreak;
+        Component streakText = streak > 1 ? Component.literal("×" + streak) : null;
         var font = Minecraft.getInstance().font;
         int w = font.width(text);
+        int totalWidth = w + (streakText == null ? 0
+                : STREAK_GAP + (int) Math.ceil(font.width(streakText) * STREAK_SCALE));
+        int titleX = -totalWidth / 2;
         int cx = gfx.guiWidth() / 2;
         int cy = (int) (gfx.guiHeight() - 52 - rise); // 物品栏上方
 
@@ -59,8 +76,17 @@ public final class FloatingTextRenderer {
         pose.translate(cx, cy, 0.0);
         pose.scale(scale, scale, 1.0f);
         // 红字主体 + 黑色阴影，保证在任何背景上都可读
-        gfx.drawString(font, text, -w / 2 + 1, 1, (alpha << 24) | 0x0A0303, false);
-        gfx.drawString(font, text, -w / 2, 0, (alpha << 24) | 0xAE2524, false);
+        gfx.drawString(font, text, titleX + 1, 1, (alpha << 24) | 0x0A0303, false);
+        gfx.drawString(font, text, titleX, 0, (alpha << 24) | 0xAE2524, false);
+        if (streakText != null) {
+            // 连击数字随标题共用弹出/淡出动画，以较小字号靠右对齐基线。
+            pose.pushPose();
+            pose.translate(titleX + w + STREAK_GAP, (font.lineHeight - 1) * (1.0f - STREAK_SCALE), 0.0);
+            pose.scale(STREAK_SCALE, STREAK_SCALE, 1.0f);
+            gfx.drawString(font, streakText, 1, 1, (alpha << 24) | 0x0A0303, false);
+            gfx.drawString(font, streakText, 0, 0, (alpha << 24) | 0xAE2524, false);
+            pose.popPose();
+        }
         pose.popPose();
     }
 }

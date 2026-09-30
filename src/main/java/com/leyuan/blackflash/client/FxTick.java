@@ -23,6 +23,6 @@ final class FxTick {
         ClientLevel level = mc.level;
         if (level == null) return;
         double worldTicks = level.getGameTime() + mc.getTimer().getGameTimeDeltaPartialTick(true);
-        FxClock.advance(worldTicks, 0, true);
+        FxClock.sample(worldTicks);
     }
 }

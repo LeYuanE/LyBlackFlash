@@ -1,8 +1,8 @@
 package com.leyuan.blackflash.logic;
 
-import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.attachment.BlackFlashAttachments;
 import com.leyuan.blackflash.config.BlackFlashConfig;
+import com.leyuan.blackflash.status.BlackFlashStatus;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
@@ -25,7 +25,8 @@ public final class GrowthManager {
 
     /** 毫秒 → 刻，至少 1 刻，避免 0 长窗口导致连击永远断开。 */
     private static long toTicks(long millis) {
-        return Math.max(1L, (millis + MS_PER_TICK - 1) / MS_PER_TICK);
+        if (millis <= 0L) return 1L;
+        return millis / MS_PER_TICK + (millis % MS_PER_TICK == 0L ? 0L : 1L);
     }
 
     private static long gameTime(ServerPlayer player) {
@@ -54,6 +55,48 @@ public final class GrowthManager {
         long at = player.getData(BlackFlashAttachments.STREAK_AT);
         long window = toTicks(BlackFlashConfig.CONFIG.streakWindowMs.get());
         return (gameTime(player) - at) <= window ? streak : 0;
+    }
+
+    public static long streakDurationTicks() {
+        return toTicks(BlackFlashConfig.CONFIG.streakWindowMs.get());
+    }
+
+    public static long mugaDurationTicks() {
+        return toTicks(BlackFlashConfig.CONFIG.mugaDurationMs.get());
+    }
+
+    public static long streakRemainingTicks(ServerPlayer player) {
+        if (liveStreak(player) <= 0) return 0L;
+        long elapsed = positiveDifference(gameTime(player), player.getData(BlackFlashAttachments.STREAK_AT));
+        return Math.max(0L, streakDurationTicks() - elapsed);
+    }
+
+    public static long mugaRemainingTicks(ServerPlayer player) {
+        if (mugaStacks(player) <= 0) return 0L;
+        return positiveDifference(player.getData(BlackFlashAttachments.MUGA_UNTIL), gameTime(player));
+    }
+
+    /** 差值钳制，避免异常存档时间溢出后变成负数。 */
+    private static long positiveDifference(long end, long start) {
+        if (end <= start) return 0L;
+        long difference = end - start;
+        return difference < 0L ? Long.MAX_VALUE : difference;
+    }
+
+    /** 只读取成长状态；过期无我仍交由原有入口清理。 */
+    public static BlackFlashStatus snapshot(ServerPlayer player) {
+        int count = player.getData(BlackFlashAttachments.COUNT);
+        long day = player.level().getDayTime() / 24000L;
+        int daily = day == player.getData(BlackFlashAttachments.DAILY_DAY)
+                ? player.getData(BlackFlashAttachments.DAILY_COUNT) : 0;
+        int streak = liveStreak(player);
+        int stacks = mugaStacks(player);
+        double multiplier = Math.pow(BlackFlashConfig.CONFIG.mugaMultiplier.get(), stacks);
+        if (!Double.isFinite(multiplier)) multiplier = Double.MAX_VALUE;
+        return new BlackFlashStatus(count, daily, streak, stacks,
+                streakRemainingTicks(player), streakDurationTicks(),
+                mugaRemainingTicks(player), mugaDurationTicks(), gameTime(player),
+                ChanceTable.baseChance(count), ChanceTable.withMuga(count, stacks), multiplier);
     }
 
     /** 黑闪命中后的全部状态更新；返回本次结算值供成就触发器使用 */

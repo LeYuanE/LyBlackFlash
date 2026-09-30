@@ -202,7 +202,7 @@ public final class FlashRenderer {
         syncLevel(mc.level);
         if (activeLevel == null || !finite(hit) || !finite(fist)) return;
         if (mc.gameRenderer.getMainCamera().getPosition().distanceToSqr(hit) > MAX_DISTANCE_SQUARED) return;
-        FxClock.advance(worldTicks(mc), 0, true);
+        FxClock.sample(worldTicks(mc));
         double birthTick = FxClock.birth();
         expire(FxClock.now());
         if (FLASHES.size() >= MAX_FLASHES) FLASHES.removeFirst();
@@ -216,8 +216,8 @@ public final class FlashRenderer {
         var mc = Minecraft.getInstance();
         syncLevel(mc.level);
         if (activeLevel == null) return;
-        // 每个客户端刻推进一次，并处理服务器时间同步造成的倒退。
-        FxClock.advance(worldTicks(mc), 1.0, !FxClock.isRewind(worldTicks(mc) + 1.0));
+        // 只按实际观测到的世界时间推进；暂停、/tick freeze 时世界时间不动，特效也冻结。
+        FxClock.sample(worldTicks(mc));
         expire(FxClock.now());
     }
 
@@ -225,6 +225,11 @@ public final class FlashRenderer {
     private static double worldTicks(Minecraft mc) {
         if (activeLevel == null) return FxClock.now();
         return activeLevel.getGameTime() + mc.getTimer().getGameTimeDeltaPartialTick(true);
+    }
+
+    /** 与状态/HUD 生命周期共享同一个世界切换重置点。 */
+    public static void syncClientLevel() {
+        syncLevel(Minecraft.getInstance().level);
     }
 
     private static void syncLevel(ClientLevel level) {
@@ -250,8 +255,8 @@ public final class FlashRenderer {
         double nowTick = 0;
         if (activeLevel != null) {
             double worldTicks = worldTicks(mc);
-            // 帧内只补充插值增量；世界时间倒退（服务器同步倒流）时递增不受影响。
-            FxClock.advance(worldTicks, event.getPartialTick().getGameTimeDeltaPartialTick(true), true);
+            // 渲染帧只采样世界时钟；回退的同步值被 FxClock 丢弃。
+            FxClock.sample(worldTicks);
             nowTick = FxClock.now();
             expire(nowTick);
         }

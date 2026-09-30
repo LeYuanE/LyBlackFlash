@@ -4,6 +4,7 @@ import com.leyuan.blackflash.BlackFlash;
 import com.leyuan.blackflash.attachment.BlackFlashAttachments;
 import com.leyuan.blackflash.config.BlackFlashConfig;
 import com.leyuan.blackflash.network.BlackFlashEffectPayload;
+import com.leyuan.blackflash.network.BlackFlashHitPayload;
 import com.leyuan.blackflash.network.NearMissPayload;
 import com.leyuan.blackflash.network.NetworkHandler;
 import net.minecraft.server.level.ServerPlayer;
@@ -69,7 +70,10 @@ public final class TriggerHandler {
         int stacks = GrowthManager.mugaStacks(player);
         double chance = forced ? 1.0 : ChanceTable.withMuga(count, stacks);
         if (player.getRandom().nextFloat() >= chance) {
-            if (crit) GrowthManager.onCritMissed(player);
+            if (crit) {
+                GrowthManager.onCritMissed(player);
+                StatusSyncHandler.send(player);
+            }
             return;
         }
 
@@ -107,6 +111,9 @@ public final class TriggerHandler {
 
         // ⑦ 状态成长：熟练度 +1、连击 +1、无我刷新
         GrowthManager.FlashResult result = GrowthManager.onFlashLanded(player);
+        StatusSyncHandler.send(player);
+        player.connection.send(new BlackFlashHitPayload(player.getUUID(), player.level().dimension().location(),
+                result.streak(), GrowthManager.mugaStacks(player), false));
 
         // ⑧ 音效（命中点，3D 定位靠单声道 ogg）+ 广播演出包（含服务端随机种子）
         //

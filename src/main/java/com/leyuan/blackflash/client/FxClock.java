@@ -8,9 +8,9 @@ package com.leyuan.blackflash.client;
  * 同步值可能<b>小于</b>客户端已经走过的值，于是「现在 − 出生时刻」当场变小，
  * 正在播放的闪电会突然退回更早的动画阶段——表现就是闪一下、消失、再重新长出来。
  *
- * <p>这里只在同步值<b>前进</b>时采纳它（避免倒退），同时在时钟长期偏离世界时间时
- * 缓慢靠拢（避免离线或长时间不同步后越飘越远）。动画的「年龄」仍然由世界时间口径
- * 的帧插值累加得到，因此暂停、低 TPS 拉伸等原有观感保持不变。
+ * <p>这里只在同步值<b>前进</b>时采纳它（避免倒退），并把世界时间回退期间的高水位
+ * 保留到同步值追上。动画的「年龄」按实际观测到的世界时间增量推进，因此暂停、
+ * /tick freeze、低 TPS 拉伸等行为保持一致。
  */
 final class FxClock {
     private FxClock() {}
@@ -23,20 +23,40 @@ final class FxClock {
     private static final double DRIFT_TOLERANCE = 200.0;
 
     private static double ticks;
+    private static double lastWorldTicks;
     private static boolean started;
 
-    /** 每个帧/刻调用一次：worldTicks 为当前世界时间（含帧插值），monotonic 表示世界未重置。 */
+    /**
+     * 以观测到的世界时间推进。世界时间没有前进时（暂停、/tick freeze）时钟也不前进；
+     * 服务端同步把世界时间向后校正时，丢弃回退但重新基准化后续增量。
+     */
+    static void sample(double worldTicks) {
+        if (!Double.isFinite(worldTicks)) return;
+        if (!started) {
+            ticks = worldTicks;
+            lastWorldTicks = worldTicks;
+            started = true;
+            return;
+        }
+        double delta = worldTicks - lastWorldTicks;
+        // 服务器回退时保留高水位，等待世界时间追上后再继续推进，避免动画倒退或重播。
+        if (delta <= 0) return;
+        lastWorldTicks = worldTicks;
+        ticks += Math.min(delta, MAX_CORRECTION);
+    }
+
+    /** 保留给纯 Java 测试与离散状态机使用的推进入口。 */
     static void advance(double worldTicks, double delta, boolean monotonic) {
         if (!Double.isFinite(worldTicks) || !Double.isFinite(delta)) return;
         if (!started || !monotonic) {
             ticks = worldTicks;
+            lastWorldTicks = worldTicks;
             started = true;
             return;
         }
-        if (delta > 0) ticks += delta;
-        // 世界时间明显领先时逐步追上去，落后时不回退，保证年龄永不减少。
-        double drift = worldTicks - ticks;
-        if (drift > DRIFT_TOLERANCE) ticks += Math.min(drift, MAX_CORRECTION);
+        double previousWorldTicks = lastWorldTicks;
+        sample(worldTicks);
+        if (delta > 0 && worldTicks == previousWorldTicks) ticks += delta;
     }
 
     /** 世界时间相对本时钟是否明显倒退（同步倒流、切维度等）。 */
@@ -51,6 +71,7 @@ final class FxClock {
 
     static void reset() {
         ticks = 0;
+        lastWorldTicks = 0;
         started = false;
     }
 

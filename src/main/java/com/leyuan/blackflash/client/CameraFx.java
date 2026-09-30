@@ -25,6 +25,10 @@ public final class CameraFx {
         kickStartMs = FxClock.gameMillis();
     }
 
+    public static void clear() {
+        kickStartMs = -1L;
+    }
+
     @SubscribeEvent
     public static void onComputeFov(ViewportEvent.ComputeFov event) {
         if (!BlackFlashConfig.CONFIG.fovKickEnabled.get()) return;

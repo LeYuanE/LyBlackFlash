@@ -148,9 +148,13 @@ public final class FlashGeometryChecks {
             rewoundWorld += 0.05;
         }
         double afterRewind = FxClock.now();
-        require(afterRewind >= beforeRewind, "Time sync rewind restarted the animation");
-        require(afterRewind - beforeRewind > 1.5 && afterRewind - beforeRewind < 2.5,
-                "Clock should keep advancing at the interpolated rate after a rewind");
+        require(afterRewind == beforeRewind, "Time sync rewind restarted the animation");
+        // 世界时间重新追上旧基准后，后续正向样本才继续推进。
+        for (int i = 0; i < 50; i++) {
+            FxClock.sample(1020.0 + i * 0.05);
+        }
+        double afterCatchup = FxClock.now();
+        require(afterCatchup >= afterRewind, "Clock did not resume after sync catch-up");
 
         // 长期偏离后应缓慢追上，且单次补正不至于让动画瞬移。
         FxClock.reset();

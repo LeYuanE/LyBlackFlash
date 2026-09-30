@@ -9,7 +9,9 @@ import com.leyuan.blackflash.attachment.BlackFlashAttachments;
 import com.leyuan.blackflash.config.BlackFlashConfig;
 import com.leyuan.blackflash.logic.ChanceTable;
 import com.leyuan.blackflash.logic.GrowthManager;
+import com.leyuan.blackflash.logic.StatusSyncHandler;
 import com.leyuan.blackflash.network.BlackFlashEffectPayload;
+import com.leyuan.blackflash.network.BlackFlashHitPayload;
 import com.leyuan.blackflash.network.NetworkHandler;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.commands.CommandSourceStack;
@@ -62,6 +64,7 @@ public final class BlackFlashCommand {
         ServerPlayer p = player(ctx);
         int n = IntegerArgumentType.getInteger(ctx, "count");
         p.setData(BlackFlashAttachments.COUNT, n);
+        StatusSyncHandler.send(p);
         ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.set",
                 n, formatPercent(ChanceTable.baseChance(n))), true);
         return 1;
@@ -80,6 +83,7 @@ public final class BlackFlashCommand {
         Vec3 hit = p.getEyePosition().add(p.getLookAngle().scale(3));
         NetworkHandler.sendToNearbyPlayers(p.serverLevel(),
                 new BlackFlashEffectPayload(p.getId(), -1, hit.x, hit.y, hit.z, seed));
+        p.connection.send(new BlackFlashHitPayload(p.getUUID(), p.level().dimension().location(), 1, 0, true));
         ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.preview", seed), false);
         return 1;
     }
@@ -94,6 +98,7 @@ public final class BlackFlashCommand {
         p.setData(BlackFlashAttachments.MUGA_STACKS, 0);
         p.setData(BlackFlashAttachments.MUGA_UNTIL, 0L);
         GrowthManager.forgetPlayer(p.getUUID());
+        StatusSyncHandler.send(p, true);
         ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.reset"), true);
         return 1;
     }
