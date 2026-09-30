@@ -47,7 +47,11 @@ public final class TriggerHandler {
         if (cfg.requireDamageDealt.get() && event.getNewDamage() <= 0.0F) return;
 
         // ③ 蓄力与暴击校验
-        float strength = player.getAttackStrengthScale(0.0F);
+        //
+        //    采样参数必须与原版 Player.attack 一致（那里读 getAttackStrengthScale(0.5F)
+        //    并用 f2 > 0.9F 作暴击门槛）。若这里用 0.0F，冷却差半 tick 的挥击会出现
+        //    「原版判定为暴击、模组却算作未满蓄力」的分歧，连 /blackflash force 都会被挡住。
+        float strength = player.getAttackStrengthScale(0.5F);
         if (cfg.requireFullCharge.get() && strength <= 0.9F) {
             maybeNearMiss(player, victim, strength);
             return;
@@ -93,12 +97,15 @@ public final class TriggerHandler {
         GrowthManager.FlashResult result = GrowthManager.onFlashLanded(player);
 
         // ⑧ 音效（命中点，3D 定位靠单声道 ogg）+ 广播演出包（含服务端随机种子）
+        //
+        //    位置用 getY(0.6) 而非 getY()：getY() 返回【脚底】，闪电会从地面炸开、视觉偏低。
+        //    getY(0.6) 取碰撞箱 60% 高度处（约胸口），更像"命中身体"。
         victim.level().playSound(null, victim.getX(), victim.getY(), victim.getZ(),
                 BlackFlash.SOUND_IMPACT.get(), SoundSource.PLAYERS, 2.5F, 1.0F);
         long seed = player.getRandom().nextLong();
-        NetworkHandler.sendToAllPlayers(player.server,
+        NetworkHandler.sendToNearbyPlayers(player.serverLevel(),
                 new BlackFlashEffectPayload(player.getId(), victim.getId(),
-                        victim.getX(), victim.getY(), victim.getZ(), seed));
+                        victim.getX(), victim.getY(0.6), victim.getZ(), seed));
 
         // ⑨ 成就判定
         BlackFlash.FLASH_TRIGGER.get().trigger(player,
@@ -124,7 +131,12 @@ public final class TriggerHandler {
                 && !player.isSprinting();
     }
 
-    /** 「差一点」：蓄力落在 0.85~0.9 之间、其余暴击条件全满足的挥击 —— 给一次微反馈。 */
+    /**
+     * 「差一点」：蓄力已经越过 0.85、但还没到原版暴击门槛 0.9 的挥击 —— 给一次微反馈。
+     *
+     * <p>门槛 0.9 与原版一致（见 {@link #isCrit}），所以这一档永远不会和真正的暴击重叠；
+     * 采样精度同样用 0.5F，反馈的时机才与玩家看到的那一刀吻合。
+     */
     private static void maybeNearMiss(ServerPlayer player, LivingEntity victim, float strength) {
         BlackFlashConfig cfg = BlackFlashConfig.CONFIG;
         if (!cfg.nearMissFeedback.get()) return;

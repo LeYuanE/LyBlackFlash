@@ -19,14 +19,15 @@ public final class FloatingTextRenderer {
     private static volatile long startMs = -1L;
 
     public static void show() {
-        startMs = System.currentTimeMillis();
+        startMs = FxClock.gameMillis();
     }
 
     public static void render(GuiGraphics gfx, DeltaTracker tracker) {
+        FxTick.feed();
         long s = startMs;
         if (s < 0) return;
         BlackFlashConfig cfg = BlackFlashConfig.CONFIG;
-        long age = System.currentTimeMillis() - s;
+        long age = FxClock.gameMillis() - s;
         int total = cfg.floatingTextMs.get();
         if (age > total) { startMs = -1; return; }
         if (Minecraft.getInstance().player == null) return;
@@ -43,6 +44,9 @@ public final class FloatingTextRenderer {
         // 60% 后上浮淡出
         double rise = t > 0.6 ? (t - 0.6) / 0.4 * 10.0 : 0.0;
         int alpha = t < 0.6 ? 255 : (int) Math.max(0, 255 * (1.0 - (t - 0.6) / 0.4));
+        // 原版 Font.adjustColor 会把 alpha 0~3 的颜色当成"未指定透明度"并强制拉回 255，
+        // 淡出末帧若落在这个区间会突然闪亮一帧。低于 4 直接不画。
+        if (alpha < 4) return;
 
         Component text = Component.translatable("text.black_flash.name");
         var font = Minecraft.getInstance().font;

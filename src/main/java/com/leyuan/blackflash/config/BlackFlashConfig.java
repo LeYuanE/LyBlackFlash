@@ -75,13 +75,13 @@ public final class BlackFlashConfig {
 
         b.comment("无我境界").push("muga");
         mugaMultiplier = b.comment("无我概率倍率").define("mugaMultiplier", 1.2);
-        mugaDurationMs = b.comment("无我持续（毫秒）").define("mugaDurationMs", 20000L);
+        mugaDurationMs = b.comment("无我持续（毫秒，按游戏刻计：1 刻 = 50ms）").define("mugaDurationMs", 20000L);
         mugaMaxStacks = b.comment("无我叠加上限，0 = 无限").define("mugaMaxStacks", 0);
         mugaAddsProficiency = b.comment("无我是否计入熟练度").define("mugaAddsProficiency", false);
         b.pop();
 
         b.comment("连击").push("streak");
-        streakWindowMs = b.comment("连击时间窗（毫秒）").define("streakWindowMs", 10000L);
+        streakWindowMs = b.comment("连击时间窗（毫秒，按游戏刻计）").define("streakWindowMs", 10000L);
         streakBreakOnCritMiss = b.comment("暴击命中但未触发时是否清零连击").define("streakBreakOnCritMiss", true);
         b.pop();
 
@@ -94,7 +94,7 @@ public final class BlackFlashConfig {
         fovKickEnabled = b.comment("FOV 收缩开关").define("fovKickEnabled", true);
         hitPlayerScreenFx = b.comment("被击中玩家屏幕特效开关").define("hitPlayerScreenFx", true);
         nearMissFeedback = b.comment("“差一点”微反馈开关").define("nearMissFeedback", true);
-        nearMissCooldownMs = b.comment("微反馈节流（毫秒）").define("nearMissCooldownMs", 1000L);
+        nearMissCooldownMs = b.comment("微反馈节流（毫秒，按游戏刻计）").define("nearMissCooldownMs", 1000L);
         b.pop();
 
         b.comment("调试").push("debug");

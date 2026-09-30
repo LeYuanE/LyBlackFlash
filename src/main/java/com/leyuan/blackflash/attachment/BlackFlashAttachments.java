@@ -30,11 +30,11 @@ public final class BlackFlashAttachments {
             ATTACHMENTS.register("black_flash_streak", () -> AttachmentType.builder(() -> 0)
                     .serialize(Codec.INT).sync(ByteBufCodecs.VAR_INT).copyOnDeath().build());
 
-    /** 连击窗口起点（毫秒时间戳，仅服务端） */
+    /** 连击窗口起点（游戏刻，仅服务端） */
     public static final Supplier<AttachmentType<Long>> STREAK_AT =
             ATTACHMENTS.register("black_flash_streak_at", () -> AttachmentType.builder(() -> 0L).build());
 
-    /** 无我境界结束时间（毫秒时间戳）：同步、不持久化 */
+    /** 无我境界结束时刻（游戏刻）：同步、不持久化 */
     public static final Supplier<AttachmentType<Long>> MUGA_UNTIL =
             ATTACHMENTS.register("black_flash_muga_until", () -> AttachmentType.builder(() -> 0L)
                     .sync(ByteBufCodecs.VAR_LONG).build());

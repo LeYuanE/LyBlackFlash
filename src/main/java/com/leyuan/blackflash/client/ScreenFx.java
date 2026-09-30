@@ -21,17 +21,18 @@ public final class ScreenFx {
 
     public static void onVictim() {
         if (!BlackFlashConfig.CONFIG.hitPlayerScreenFx.get()) return;
-        victimStartMs = System.currentTimeMillis();
+        victimStartMs = FxClock.gameMillis();
     }
 
     public static void onNearMiss() {
-        nearMissStartMs = System.currentTimeMillis();
+        nearMissStartMs = FxClock.gameMillis();
     }
 
     public static void renderVictimOverlay(GuiGraphics gfx, DeltaTracker tracker) {
+        FxTick.feed();
         long s = victimStartMs;
         if (s < 0) return;
-        long age = System.currentTimeMillis() - s;
+        long age = FxClock.gameMillis() - s;
         if (age > VICTIM_MS) { victimStartMs = -1; return; }
         double t = age / (double) VICTIM_MS;
         int alpha = (int) (70 * (1.0 - t)); // 最亮也只有 27% 不透明度：刻意比触发者演出更淡
@@ -59,9 +60,10 @@ public final class ScreenFx {
     }
 
     public static void renderNearMiss(GuiGraphics gfx, DeltaTracker tracker) {
+        FxTick.feed();
         long s = nearMissStartMs;
         if (s < 0) return;
-        long age = System.currentTimeMillis() - s;
+        long age = FxClock.gameMillis() - s;
         if (age > NEAR_MISS_MS) { nearMissStartMs = -1; return; }
         double t = age / (double) NEAR_MISS_MS;
         int alpha = (int) (120 * (1.0 - t));
