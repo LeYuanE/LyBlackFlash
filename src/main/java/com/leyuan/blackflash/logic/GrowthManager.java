@@ -113,10 +113,14 @@ public final class GrowthManager {
         player.setData(BlackFlashAttachments.STREAK, streak);
         player.setData(BlackFlashAttachments.STREAK_AT, now);
 
-        // 无我境界：层数 +1 并刷新计时
-        int stacks = mugaStacks(player) + 1;
+        // 无我境界：层数 +1 并刷新计时。
+        // mugaActivated 记录本次是否从「未激活」进入无我：客户端只在这一刻播放激活脉冲，
+        // 已在无我中继续叠层只刷新计时，不再重复播放。
+        int previousStacks = mugaStacks(player);
+        int stacks = previousStacks + 1;
         int max = cfg.mugaMaxStacks.get();
         if (max > 0) stacks = Math.min(stacks, max);
+        boolean mugaActivated = previousStacks <= 0;
         player.setData(BlackFlashAttachments.MUGA_STACKS, stacks);
         player.setData(BlackFlashAttachments.MUGA_UNTIL, now + toTicks(cfg.mugaDurationMs.get()));
 
@@ -131,7 +135,7 @@ public final class GrowthManager {
         player.setData(BlackFlashAttachments.FORCE, 0);
 
         boolean bareHand = player.getMainHandItem().isEmpty();
-        return new FlashResult(count, streak, daily, bareHand);
+        return new FlashResult(count, streak, daily, bareHand, mugaActivated);
     }
 
     /** 暴击命中但没触发：按配置清零连击 */
@@ -156,5 +160,10 @@ public final class GrowthManager {
         NEAR_MISS_LAST.remove(uuid);
     }
 
-    public record FlashResult(int count, int streak, int daily, boolean bareHand) {}
+    /**
+     * 黑闪结算结果。
+     *
+     * @param mugaActivated 本次是否从「无我未激活」进入无我（用于客户端只在此时播放脉冲）
+     */
+    public record FlashResult(int count, int streak, int daily, boolean bareHand, boolean mugaActivated) {}
 }

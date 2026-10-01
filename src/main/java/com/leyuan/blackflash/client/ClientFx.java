@@ -32,6 +32,9 @@ public final class ClientFx {
 
     /** 由 NetworkHandler 在客户端主线程调用；不从本地未同步附件重建状态。 */
     public static void onStatus(BlackFlashStatusPayload payload) {
+        // isCurrentSelf 内部会先做世界/玩家切换检查（含 FxClock.reset），
+        // 这样切换维度的重置一定发生在记录 receivedAtTicks 之前，
+        // 否则时间戳会落在旧时钟上、导致倒计时在满值处停住。
         if (!isCurrentSelf(payload.playerId(), payload.dimension())) return;
         FxTick.feed();
         if (BlackFlashClientState.apply(payload) && payload.resetVisuals()) {
@@ -49,7 +52,10 @@ public final class ClientFx {
             return;
         }
         FloatingTextRenderer.show(payload.streak());
-        MugaPulseRenderer.trigger(payload.mugaStacks());
+        // 只在无我「从无到有」时播放激活脉冲；后续叠层/刷新不重复播放。
+        if (payload.mugaActivated()) {
+            MugaPulseRenderer.trigger();
+        }
         CameraFx.kick();
     }
 
@@ -63,6 +69,7 @@ public final class ClientFx {
         FloatingTextRenderer.clear();
         MugaPulseRenderer.clear();
         CameraFx.clear();
+        ScreenFx.clear();
     }
 
     /** 同维度重登/重生也会替换对象，不能只比较维度键或玩家 UUID。 */
@@ -121,7 +128,10 @@ public final class ClientFx {
     /** HUD 层内容：挂在所有原版层之上，绘制在物品栏上方区域 */
     public static void renderHud(GuiGraphics gfx, DeltaTracker tracker) {
         syncStatusLifecycle();
-        if (Minecraft.getInstance().options.hideGui) return;
+        var mc = Minecraft.getInstance();
+        // 与 MugaPulseRenderer / BlackFlashStatusRenderer 保持一致：F1 或打开任意界面时不绘制，
+        // 否则瞬时演出会盖在背包、聊天或熟练度界面上。
+        if (mc.options.hideGui || mc.screen != null) return;
         MugaPulseRenderer.render(gfx, tracker);
         FloatingTextRenderer.render(gfx, tracker);
         ScreenFx.renderVictimOverlay(gfx, tracker);

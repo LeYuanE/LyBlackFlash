@@ -20,10 +20,6 @@ public final class FloatingTextRenderer {
     private static volatile long startMs = -1L;
     private static volatile int currentStreak = 1;
 
-    public static void show() {
-        show(1);
-    }
-
     public static void show(int streak) {
         currentStreak = Math.max(1, streak);
         startMs = FxClock.gameMillis();

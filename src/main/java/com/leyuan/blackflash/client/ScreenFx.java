@@ -28,6 +28,17 @@ public final class ScreenFx {
         nearMissStartMs = FxClock.gameMillis();
     }
 
+    /**
+     * 清空两处瞬时演出。切世界、重生、退出时由 {@link ClientFx#clearStatusVisuals()} 调用。
+     *
+     * <p>没有世界时 {@link FxClock} 不再前进，残留的时间戳会让痕迹永远停在未到期状态，
+     * 因此必须显式清理，不能依赖自然过期。
+     */
+    public static void clear() {
+        victimStartMs = -1L;
+        nearMissStartMs = -1L;
+    }
+
     public static void renderVictimOverlay(GuiGraphics gfx, DeltaTracker tracker) {
         FxTick.feed();
         long s = victimStartMs;

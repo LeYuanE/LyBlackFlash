@@ -83,7 +83,7 @@ public final class BlackFlashCommand {
         Vec3 hit = p.getEyePosition().add(p.getLookAngle().scale(3));
         NetworkHandler.sendToNearbyPlayers(p.serverLevel(),
                 new BlackFlashEffectPayload(p.getId(), -1, hit.x, hit.y, hit.z, seed));
-        p.connection.send(new BlackFlashHitPayload(p.getUUID(), p.level().dimension().location(), 1, 0, true));
+        p.connection.send(new BlackFlashHitPayload(p.getUUID(), p.level().dimension().location(), 1, 0, false, true));
         ctx.getSource().sendSuccess(() -> Component.translatable("command.blackflash.preview", seed), false);
         return 1;
     }

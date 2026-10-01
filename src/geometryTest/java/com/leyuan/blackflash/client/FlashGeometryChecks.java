@@ -156,14 +156,24 @@ public final class FlashGeometryChecks {
         double afterCatchup = FxClock.now();
         require(afterCatchup >= afterRewind, "Clock did not resume after sync catch-up");
 
-        // 长期偏离后应缓慢追上，且单次补正不至于让动画瞬移。
+        // 小偏差按每帧上限平滑收敛，不会让动画瞬移。
         FxClock.reset();
         FxClock.advance(1000, 0, true);
-        FxClock.advance(1000, 0.05, true);
+        FxClock.advance(1010, 0.05, true);
         double justBeforeCatchup = FxClock.now();
-        FxClock.advance(5000, 0.05, true);
-        double jump = FxClock.now() - justBeforeCatchup;
-        require(jump > 0 && jump <= 5.05, "Catch-up must be gradual, not a teleport");
+        FxClock.advance(1016, 0.05, true);
+        double step = FxClock.now() - justBeforeCatchup;
+        require(step > 0 && step <= 5.05, "Small drift should converge gradually, not teleport");
+
+        // 大幅跳变（重登/跨维度/时间同步）直接重基准：接受新时间，
+        // 但绝不把跳变时长算进动画年龄，否则正在播放的演出会被瞬间快进完。
+        FxClock.reset();
+        FxClock.advance(1000, 0, true);
+        double beforeJump = FxClock.now();
+        FxClock.advance(9000, 0.05, true);
+        require(FxClock.now() == 9000, "Large jump should rebase onto the new world time");
+        require(FxClock.now() - beforeJump > 5.05,
+                "Large jump must NOT be subject to the gradual catch-up cap");
 
         // 切世界/重置后从当前世界时间重新起步，不继承旧时刻。
         FxClock.reset();

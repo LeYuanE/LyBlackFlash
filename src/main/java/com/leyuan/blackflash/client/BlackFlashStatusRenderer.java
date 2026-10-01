@@ -80,9 +80,14 @@ public final class BlackFlashStatusRenderer {
             if (filled <= 0) continue;
 
             int fillEnd = Math.min(innerRight, innerLeft + filled);
-            int split = Math.max(1, filled / 3);
-            gfx.fill(innerLeft, y + row, Math.min(fillEnd, innerLeft + split), y + row + 1, darkColor);
-            if (fillEnd > innerLeft + split) {
+            // 暗色根部固定占填充的前 1/3，其余为亮色。用比例而不是整数除法，
+            // 否则低进度时 filled/3 取整会把亮色段压成 0，整条退化成纯暗色。
+            int span = fillEnd - innerLeft;
+            int split = span <= 1 ? 0 : Math.max(1, (int) Math.round(span / 3.0));
+            if (split > 0) {
+                gfx.fill(innerLeft, y + row, innerLeft + split, y + row + 1, darkColor);
+            }
+            if (span > split) {
                 gfx.fill(innerLeft + split, y + row, fillEnd, y + row + 1, lightColor);
             }
             // 仅在填充内部放一条 1px 高光，不越过 jagged 轮廓。

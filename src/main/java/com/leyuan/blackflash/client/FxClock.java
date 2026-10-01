@@ -41,6 +41,14 @@ final class FxClock {
         double delta = worldTicks - lastWorldTicks;
         // 服务器回退时保留高水位，等待世界时间追上后再继续推进，避免动画倒退或重播。
         if (delta <= 0) return;
+        if (delta > DRIFT_TOLERANCE) {
+            // 大幅跳变（重登、跨维度、/time 类同步）不是自然流逝的时间。
+            // 若按每帧最多 MAX_CORRECTION 追上去，正在播放的演出会被快进到提前结束，
+            // 所以这里直接重基准：接受新时间，但不把这段时间算进任何动画的年龄。
+            ticks = worldTicks;
+            lastWorldTicks = worldTicks;
+            return;
+        }
         lastWorldTicks = worldTicks;
         ticks += Math.min(delta, MAX_CORRECTION);
     }

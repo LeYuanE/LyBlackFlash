@@ -59,29 +59,6 @@ public final class BlackFlashClientState {
         return status;
     }
 
-    public static int count() { return status.count(); }
-    public static int dailyCount() { return status.dailyCount(); }
-    public static int streak() { return status.streak(); }
-    public static int mugaStacks() { return status.mugaStacks(); }
-    public static double baseChance() { return status.baseChance(); }
-    public static double effectiveChance() { return status.effectiveChance(); }
-    public static double mugaMultiplier() { return status.mugaMultiplier(); }
-
-    public static double streakProgress() {
-        return status.streakDurationTicks() <= 0 ? 0.0
-                : streakRemainingTicks() / (double) status.streakDurationTicks();
-    }
-
-    public static double mugaProgress() {
-        return status.mugaDurationTicks() <= 0 ? 0.0
-                : mugaRemainingTicks() / (double) status.mugaDurationTicks();
-    }
-
-    /** 收到快照时的 FxClock 游戏 tick，不是墙钟或服务端世界时间。 */
-    public static double receivedAtTicks() {
-        return receivedAtTicks;
-    }
-
     public static double streakRemainingTicks() {
         return remainingTicks(status.streakRemainingTicks());
     }

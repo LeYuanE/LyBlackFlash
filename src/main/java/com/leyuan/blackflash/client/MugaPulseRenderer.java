@@ -16,15 +16,15 @@ public final class MugaPulseRenderer {
 
     private MugaPulseRenderer() {}
 
-    /** 仅在客户端主线程、确认是本人的无我刷新后调用。 */
+    /**
+     * 仅在客户端主线程、确认是本人的无我「从无到有」时调用。
+     *
+     * <p>叠层与刷新不再调用这里：是否新激活由服务端命中包判定，客户端不自行比较层数，
+     * 否则每次命中都会重放一次脉冲。
+     */
     public static void trigger() {
-        trigger(1);
-    }
-
-    /** 仅在客户端主线程、确认是本人的命中/无我刷新后调用。 */
-    public static void trigger(int mugaStacks) {
         Minecraft mc = Minecraft.getInstance();
-        if (mugaStacks <= 0 || mc.level == null || mc.player == null || mc.player.isDeadOrDying()) {
+        if (mc.level == null || mc.player == null || mc.player.isDeadOrDying()) {
             clear();
             return;
         }

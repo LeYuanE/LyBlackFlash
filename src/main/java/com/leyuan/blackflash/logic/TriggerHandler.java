@@ -113,7 +113,7 @@ public final class TriggerHandler {
         GrowthManager.FlashResult result = GrowthManager.onFlashLanded(player);
         StatusSyncHandler.send(player);
         player.connection.send(new BlackFlashHitPayload(player.getUUID(), player.level().dimension().location(),
-                result.streak(), GrowthManager.mugaStacks(player), false));
+                result.streak(), GrowthManager.mugaStacks(player), result.mugaActivated(), false));
 
         // ⑧ 音效（命中点，3D 定位靠单声道 ogg）+ 广播演出包（含服务端随机种子）
         //
