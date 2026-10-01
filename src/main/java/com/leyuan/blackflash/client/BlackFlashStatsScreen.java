@@ -10,7 +10,7 @@ import java.util.Locale;
 /** 只读熟练度面板：没有容器、按钮或客户端状态写入，也不会暂停世界。 */
 public final class BlackFlashStatsScreen extends Screen {
     private static final int PANEL_WIDTH = 300;
-    private static final int PANEL_HEIGHT = 160;
+    private static final int PANEL_HEIGHT = 141;
     private static final int PADDING = 14;
     private static final int TEXT = 0xFFF0DDDA;
     private static final int MUTED = 0xFFB9A5A2;
@@ -51,12 +51,12 @@ public final class BlackFlashStatsScreen extends Screen {
             gfx.fill(PADDING, 31, PANEL_WIDTH - PADDING, 32, 0xFF632020);
 
             if (!BlackFlashClientState.hasStatus()) {
-                gfx.drawCenteredString(font, text("syncing", "正在同步服务器数据…"), PANEL_WIDTH / 2, 76, MUTED);
+                gfx.drawCenteredString(font, text("syncing", "正在同步服务器数据…"), PANEL_WIDTH / 2, 70, MUTED);
             } else {
                 renderStats(gfx);
             }
-            gfx.fill(PADDING, PANEL_HEIGHT - 30, PANEL_WIDTH - PADDING, PANEL_HEIGHT - 29, 0xFF342020);
-            gfx.drawCenteredString(font, text("close", "ESC 关闭 · 世界不会暂停"), PANEL_WIDTH / 2, PANEL_HEIGHT - 19, MUTED);
+            gfx.fill(PADDING, 118, PANEL_WIDTH - PADDING, 119, 0xFF342020);
+            gfx.drawCenteredString(font, text("close", "ESC 关闭 · 世界不会暂停"), PANEL_WIDTH / 2, 129, MUTED);
         } finally {
             gfx.pose().popPose();
         }
